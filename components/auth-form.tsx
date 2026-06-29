@@ -1,6 +1,7 @@
-'use client'
+"use client"
 
 import { useActionState } from "react"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,6 +22,8 @@ const initialState: AuthState = {}
 
 export function AuthForm({ title, description, action, submitLabel, confirmPassword }: AuthFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState)
+  const t = useTranslations("auth")
+  const tc = useTranslations("common")
 
   return (
     <Card className="border-border/80 bg-white/95 shadow-[0_24px_80px_-30px_rgba(0,0,0,0.35)]">
@@ -41,16 +44,23 @@ export function AuthForm({ title, description, action, submitLabel, confirmPassw
         ) : null}
         <form action={formAction} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" autoComplete="email" placeholder="you@example.com" required />
+            <Label htmlFor="email">{t("email")}</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              placeholder={t("emailPlaceholder")}
+              required
+            />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+            <Label htmlFor="password">{t("password")}</Label>
             <Input id="password" name="password" type="password" autoComplete="current-password" required />
           </div>
           {confirmPassword ? (
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm password</Label>
+              <Label htmlFor="confirmPassword">{t("confirmPassword")}</Label>
               <Input
                 id="confirmPassword"
                 name="confirmPassword"
@@ -61,11 +71,10 @@ export function AuthForm({ title, description, action, submitLabel, confirmPassw
             </div>
           ) : null}
           <Button type="submit" className="w-full rounded-xl" disabled={pending}>
-            {pending ? "Please wait..." : submitLabel}
+            {pending ? tc("pleaseWait") : submitLabel}
           </Button>
         </form>
       </CardContent>
     </Card>
   )
 }
-

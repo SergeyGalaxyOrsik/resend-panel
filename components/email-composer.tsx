@@ -1,6 +1,7 @@
-'use client'
+"use client"
 
-import { useMemo, useActionState } from "react"
+import { useActionState, useMemo, useState } from "react"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -38,11 +39,11 @@ function escapeHtml(input: string) {
     .replace(/'/g, "&#39;")
 }
 
-function renderPreview(text: string) {
-  const escaped = escapeHtml(text.trim() || "Your message preview will appear here.")
+function renderPreview(text: string, placeholder: string) {
+  const escaped = escapeHtml(text.trim() || placeholder)
   const linked = escaped.replace(
     /(https?:\/\/[^\s<]+)/g,
-    (url) => `<a href="${url}" target="_blank" rel="noreferrer noopener" class="text-zinc-950 underline">${url}</a>`
+    (url) => `<a href="${url}" target="_blank" rel="noreferrer noopener" class="text-primary underline">${url}</a>`
   )
 
   return linked
@@ -67,11 +68,13 @@ export function EmailComposer({
   compact = false,
 }: EmailComposerProps) {
   const [state, formAction, pending] = useActionState(action, initialState)
-  const previewHtml = useMemo(() => renderPreview(initialText), [initialText])
+  const [text, setText] = useState(initialText)
+  const t = useTranslations("compose")
+  const previewHtml = useMemo(() => renderPreview(text, t("previewPlaceholder")), [text, t])
 
   return (
     <div className={cn("grid gap-6", compact ? "lg:grid-cols-[1.2fr_0.8fr]" : "xl:grid-cols-[1.3fr_0.7fr]")}>
-      <Card className="border-border/80 bg-white/90 shadow-[0_24px_80px_-32px_rgba(0,0,0,0.32)]">
+      <Card className="border-border/80">
         <CardHeader className="space-y-2">
           <CardTitle className="text-2xl">{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
@@ -95,66 +98,66 @@ export function EmailComposer({
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="subject">Subject</Label>
-                <Input id="subject" name="subject" defaultValue={initialSubject} placeholder="Project update" required />
+                <Label htmlFor="subject">{t("subject")}</Label>
+                <Input id="subject" name="subject" defaultValue={initialSubject} placeholder={t("subjectPlaceholder")} required />
               </div>
 
               {!hideRecipients ? (
                 <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="to">To</Label>
-                  <Input id="to" name="to" defaultValue={initialTo} placeholder="name@company.com" required />
+                  <Label htmlFor="to">{t("to")}</Label>
+                  <Input id="to" name="to" defaultValue={initialTo} placeholder={t("toPlaceholder")} required />
                 </div>
               ) : (
                 <input type="hidden" name="to" value={initialTo} />
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="cc">CC</Label>
-                <Input id="cc" name="cc" defaultValue={initialCc} placeholder="cc@company.com" />
+                <Label htmlFor="cc">{t("cc")}</Label>
+                <Input id="cc" name="cc" defaultValue={initialCc} placeholder={t("ccPlaceholder")} />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="bcc">BCC</Label>
-                <Input id="bcc" name="bcc" defaultValue={initialBcc} placeholder="bcc@company.com" />
+                <Label htmlFor="bcc">{t("bcc")}</Label>
+                <Input id="bcc" name="bcc" defaultValue={initialBcc} placeholder={t("bccPlaceholder")} />
               </div>
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <Label htmlFor="text">Message</Label>
-                <span className="text-xs text-muted-foreground">Plain text with live preview</span>
+                <Label htmlFor="text">{t("message")}</Label>
+                <span className="text-xs text-muted-foreground">{t("livePreviewHint")}</span>
               </div>
               <Textarea
                 id="text"
                 name="text"
-                defaultValue={initialText}
-                placeholder="Write your email here..."
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+                placeholder={t("messagePlaceholder")}
                 className="min-h-[300px]"
+                required
               />
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Button type="submit" name="intent" value="save" variant="outline" className="rounded-xl">
-                Save draft
+              <Button type="submit" name="intent" value="save" variant="outline">
+                {t("saveDraft")}
               </Button>
-              <Button type="submit" name="intent" value="send" className="rounded-xl" disabled={pending}>
-                {pending ? "Sending..." : "Send message"}
+              <Button type="submit" name="intent" value="send" disabled={pending}>
+                {pending ? t("sending") : t("sendMessage")}
               </Button>
             </div>
           </form>
         </CardContent>
       </Card>
 
-      <Card className="border-border/80 bg-zinc-950 text-white shadow-[0_24px_80px_-32px_rgba(0,0,0,0.48)]">
+      <Card className="border-border/80 bg-muted/30">
         <CardHeader className="space-y-2">
-          <CardTitle className="text-2xl text-white">Preview</CardTitle>
-          <CardDescription className="text-zinc-400">
-            This is the sanitized message preview that will be used for the final HTML payload.
-          </CardDescription>
+          <CardTitle className="text-2xl">{t("preview")}</CardTitle>
+          <CardDescription>{t("previewDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div
-            className="prose prose-invert max-w-none rounded-2xl border border-white/10 bg-white/5 p-6 text-sm leading-7 text-zinc-100"
+            className="prose prose-sm max-w-none rounded-xl border bg-background p-6 text-sm leading-7"
             dangerouslySetInnerHTML={{ __html: previewHtml }}
           />
         </CardContent>
@@ -162,4 +165,3 @@ export function EmailComposer({
     </div>
   )
 }
-

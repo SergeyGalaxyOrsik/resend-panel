@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server"
 import { requireCurrentUser } from "@/lib/auth"
 import { getCurrentWorkspace, getCurrentSettings, getThreadWithMessages } from "@/lib/store"
 import { getReplyRecipients, renderThreadSubject } from "@/lib/email"
@@ -9,17 +10,18 @@ type Props = {
 }
 
 export default async function ComposePage({ searchParams }: Props) {
-  const user = await requireCurrentUser()
+  await requireCurrentUser()
   const workspace = await getCurrentWorkspace()
   if (!workspace) return null
 
+  const t = await getTranslations("compose")
   const { threadId } = await searchParams
 
   let initialTo = ""
   let initialSubject = ""
   let replyToMessageId = ""
-  let title = "New message"
-  let description = "Write and send an email through Resend."
+  let title = t("newMessage")
+  let description = t("newMessageDescription")
 
   if (threadId) {
     const result = await getThreadWithMessages(workspace.id, threadId)
@@ -30,8 +32,8 @@ export default async function ComposePage({ searchParams }: Props) {
         replyToMessageId = lastMessage.id
       }
       initialSubject = `Re: ${renderThreadSubject(result.thread.subject)}`
-      title = "Reply"
-      description = `Replying to ${result.thread.subject}`
+      title = t("reply")
+      description = t("replyingTo", { subject: result.thread.subject })
     }
   }
 

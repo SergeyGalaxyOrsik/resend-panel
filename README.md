@@ -6,23 +6,24 @@ Self-hosted email management panel powered by [Resend](https://resend.com). Sing
 
 - **Auth bootstrap** — first user becomes workspace owner, registration closes automatically
 - **Inbox & threads** — receive inbound emails via Resend webhook, threaded conversation view
-- **Compose & reply** — send emails through Resend API, reply within threads
+- **Compose & reply** — send emails through Resend API, reply within threads with live preview
 - **Drafts** — save and resume drafts
 - **Delivery stats** — sent, delivered, opened, clicked, failed metrics
-- **Settings** — encrypted Resend API token storage, sender identity config
+- **Settings** — encrypted Resend API token storage, connection test, sender identity config
 
 ## Tech Stack
 
 - [Next.js 16](https://nextjs.org) (App Router, React 19)
-- [shadcn/ui](https://ui.shadcn.com) (radix-nova) + Tailwind CSS 4
-- File-based JSON store (no external database required)
+- [shadcn/ui](https://ui.shadcn.com) sidebar-09 + Tailwind CSS 4
+- [Supabase](https://supabase.com) Postgres (hosted)
 - AES-256-GCM encryption for secrets
 
 ## Getting Started
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org) 18+ or [Bun](https://bun.sh)
+- [Bun](https://bun.sh) or Node.js 18+
+- Hosted Supabase project
 - A [Resend](https://resend.com) account and API token
 
 ### Installation
@@ -33,59 +34,57 @@ cd resend-panel
 cp .env.example .env
 ```
 
-Generate an encryption key:
+Configure `.env`:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SUPABASE_URL` | Yes | Hosted Supabase project URL |
+| `SUPABASE_SECRET_KEY` | Yes | Server-only secret key (`SUPABASE_SERVICE_KEY` also supported) |
+| `APP_SECRET` | Yes | Encryption key. Generate with `openssl rand -hex 32` |
+| `RESEND_WEBHOOK_SECRET` | Prod | Webhook signature verification |
+
+Apply schema (via Supabase dashboard SQL or MCP):
 
 ```bash
-# macOS/Linux
-echo "APP_SECRET=$(openssl rand -hex 32)" >> .env
+# SQL in supabase/migrations/001_initial_schema.sql
 ```
 
-Install dependencies and start the dev server:
+Migrate legacy JSON data (optional):
+
+```bash
+bun run scripts/migrate-json-to-supabase.ts
+```
+
+Install and run:
 
 ```bash
 bun install
 bun run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). The first account you create becomes the workspace owner.
-
-### Configuration
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `APP_SECRET` | Yes | Encryption key for API tokens. Generate with `openssl rand -hex 32` |
-| `NODE_ENV` | No | Set to `production` in deployed environments |
-
 ### Resend Setup
 
-1. Create a [Resend](https://resend.com) account
-2. Go to **Settings** in the panel and paste your API token
-3. Configure inbound email in your Resend dashboard pointing to `/api/inbound`
+1. Paste API token in **Settings**
+2. Configure inbound webhook → `https://your-domain/api/inbound`
+3. Configure event webhook → `https://your-domain/api/events`
 
 ## Project Structure
 
 ```
 app/
-├── (auth)/              # Login, register (public)
-│   ├── login/
-│   ├── register/
-│   └── layout.tsx
-├── (app)/               # Protected routes (sidebar shell)
+├── (auth)/              # Login, register
+├── (app)/               # Protected routes (sidebar-09 shell)
 │   ├── dashboard/
-│   ├── inbox/
-│   │   └── [threadId]/
-│   ├── sent/
-│   ├── compose/
-│   ├── drafts/
-│   │   └── [draftId]/edit/
-│   ├── statistics/
-│   ├── settings/
-│   └── layout.tsx
-├── api/inbound/         # Resend webhook endpoint
-├── actions.ts           # Server actions
-└── layout.tsx           # Root layout
-components/              # UI components
-lib/                     # Auth, store, crypto, email utils
+│   ├── inbox/[threadId]/
+│   ├── sent/, compose/, drafts/, statistics/, settings/
+├── api/inbound/         # Inbound email webhook
+├── api/events/          # Delivery/open/click events
+lib/
+├── store.ts             # Supabase data layer
+├── supabase.ts          # Supabase client
+scripts/
+├── migrate-json-to-supabase.ts
+└── repair-workspace.ts
 ```
 
 ## License

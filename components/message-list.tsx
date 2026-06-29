@@ -1,4 +1,4 @@
-import Link from "next/link"
+import { Link } from "@/i18n/navigation"
 import type { Message } from "@/lib/types"
 import { formatRelative } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
@@ -8,12 +8,14 @@ type MessageListProps = {
   messages: Message[]
   emptyLabel?: string
   variant?: "inbox" | "sent"
+  locale?: string
 }
 
 export function MessageList({
   messages,
   emptyLabel = "No messages.",
   variant = "inbox",
+  locale,
 }: MessageListProps) {
   if (messages.length === 0) {
     return (
@@ -26,10 +28,7 @@ export function MessageList({
   return (
     <div className="space-y-2">
       {messages.map((message) => {
-        const display =
-          variant === "inbox"
-            ? message.fromEmail
-            : message.to[0] || "unknown"
+        const display = variant === "inbox" ? message.fromEmail : message.to[0] || "unknown"
 
         return (
           <Link
@@ -41,19 +40,13 @@ export function MessageList({
           >
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <span className="truncate text-sm font-medium">
-                  {display}
-                </span>
-                <Badge className="shrink-0 capitalize text-xs">
-                  {message.status}
-                </Badge>
+                <span className="truncate text-sm font-medium">{display}</span>
+                <Badge className="shrink-0 capitalize text-xs">{message.status}</Badge>
               </div>
-              <p className="mt-1 truncate text-sm text-muted-foreground">
-                {message.subject}
-              </p>
+              <p className="mt-1 truncate text-sm text-muted-foreground">{message.subject}</p>
             </div>
             <span className="shrink-0 text-xs text-muted-foreground">
-              {formatRelative(message.createdAt)}
+              {formatRelative(message.createdAt, locale)}
             </span>
           </Link>
         )

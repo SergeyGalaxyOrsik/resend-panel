@@ -1,6 +1,7 @@
 "use client"
 
 import { useActionState } from "react"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,95 +12,126 @@ type Action = (prevState: AuthState, formData: FormData) => Promise<AuthState>
 
 type SettingsFormProps = {
   action: Action
+  testAction: Action
+  syncAction: Action
   initialFromName: string
   initialFromEmail: string
   initialInboundEmail: string
+  hasToken: boolean
 }
 
 const initialState: AuthState = {}
 
 export function SettingsForm({
   action,
+  testAction,
+  syncAction,
   initialFromName,
   initialFromEmail,
   initialInboundEmail,
+  hasToken,
 }: SettingsFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState)
+  const [testState, testFormAction, testPending] = useActionState(testAction, initialState)
+  const [syncState, syncFormAction, syncPending] = useActionState(syncAction, initialState)
+  const feedback = state.error || testState.error || syncState.error
+  const success = state.success || testState.success || syncState.success
+  const t = useTranslations("settings")
+  const ta = useTranslations("auth")
 
   return (
-    <Card className="border-border/80 bg-white/90 shadow-[0_24px_80px_-32px_rgba(0,0,0,0.32)]">
+    <Card className="border-border/80">
       <CardHeader className="space-y-2">
-        <CardTitle className="text-2xl">Resend settings</CardTitle>
-        <CardDescription>
-          Configure your Resend API token and email sender identity.
-        </CardDescription>
+        <CardTitle className="text-2xl">{t("formTitle")}</CardTitle>
+        <CardDescription>{t("formDescription")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {state.error ? (
+        {feedback ? (
           <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {state.error}
+            {feedback}
           </div>
         ) : null}
-        {state.success ? (
+        {success ? (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-            {state.success}
+            {success}
           </div>
         ) : null}
+
+        {hasToken ? (
+          <div className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm">
+            {t("tokenConfigured")} <span className="font-mono">re_••••••••</span>
+          </div>
+        ) : (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {t("noToken")}
+          </div>
+        )}
 
         <form action={formAction} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="resendToken">Resend API Token</Label>
+            <Label htmlFor="resendToken">{t("resendToken")}</Label>
             <Input
               id="resendToken"
               name="resendToken"
               type="password"
-              placeholder="re_..."
+              placeholder={hasToken ? t("tokenPlaceholderKeep") : t("tokenPlaceholderNew")}
               autoComplete="off"
             />
-            <p className="text-xs text-muted-foreground">
-              Your token is encrypted and stored server-side. It never reaches the browser.
-            </p>
+            <p className="text-xs text-muted-foreground">{t("tokenHint")}</p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="fromName">From name</Label>
-              <Input
-                id="fromName"
-                name="fromName"
-                defaultValue={initialFromName}
-                placeholder="Your Name"
-              />
+              <Label htmlFor="fromName">{t("fromName")}</Label>
+              <Input id="fromName" name="fromName" defaultValue={initialFromName} placeholder={t("fromNamePlaceholder")} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="fromEmail">From email</Label>
+              <Label htmlFor="fromEmail">{t("fromEmail")}</Label>
               <Input
                 id="fromEmail"
                 name="fromEmail"
                 type="email"
                 defaultValue={initialFromEmail}
-                placeholder="you@example.com"
+                placeholder={ta("emailPlaceholder")}
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="inboundEmail">Inbound email</Label>
+            <Label htmlFor="inboundEmail">{t("inboundEmail")}</Label>
             <Input
               id="inboundEmail"
               name="inboundEmail"
               defaultValue={initialInboundEmail}
-              placeholder="inbox@workspace.resend.dev"
+              placeholder={t("inboundPlaceholder")}
             />
             <p className="text-xs text-muted-foreground">
-              Configure this address in your Resend dashboard to receive inbound emails.
+              {t.rich("webhookHint", {
+                inbound: (chunks) => <code className="rounded bg-muted px-1">{chunks}</code>,
+                events: (chunks) => <code className="rounded bg-muted px-1">{chunks}</code>,
+              })}
             </p>
           </div>
 
-          <Button type="submit" className="rounded-xl" disabled={pending}>
-            {pending ? "Saving..." : "Save settings"}
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" disabled={pending}>
+              {pending ? t("saving") : t("saveSettings")}
+            </Button>
+          </div>
         </form>
+
+        <div className="flex flex-wrap gap-3">
+          <form action={testFormAction}>
+            <Button type="submit" variant="outline" disabled={testPending || !hasToken}>
+              {testPending ? t("testing") : t("testConnection")}
+            </Button>
+          </form>
+          <form action={syncFormAction}>
+            <Button type="submit" variant="outline" disabled={syncPending || !hasToken}>
+              {syncPending ? t("syncing") : t("syncHistory")}
+            </Button>
+          </form>
+        </div>
       </CardContent>
     </Card>
   )

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation"
+import { getTranslations } from "next-intl/server"
 import { requireCurrentUser } from "@/lib/auth"
 import { getCurrentWorkspace, listDrafts } from "@/lib/store"
 import { composeAction } from "@/app/actions"
@@ -10,18 +11,19 @@ type Props = {
 
 export default async function EditDraftPage({ params }: Props) {
   const { draftId } = await params
-  const user = await requireCurrentUser()
+  await requireCurrentUser()
   const workspace = await getCurrentWorkspace()
   if (!workspace) return null
 
+  const t = await getTranslations("compose")
   const drafts = await listDrafts(workspace.id)
   const draft = drafts.find((d) => d.id === draftId)
   if (!draft) notFound()
 
   return (
     <EmailComposer
-      title="Edit draft"
-      description="Continue editing your message."
+      title={t("editDraft")}
+      description={t("editDraftDescription")}
       action={composeAction}
       initialTo={draft.to}
       initialCc={draft.cc}

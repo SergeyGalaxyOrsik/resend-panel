@@ -1,15 +1,19 @@
+import { getLocale, getTranslations } from "next-intl/server"
 import { requireCurrentUser } from "@/lib/auth"
 import { getCurrentWorkspace, getStats } from "@/lib/store"
 import { StatCards } from "@/components/stat-cards"
 import { formatDate } from "@/lib/format"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { EmptyState } from "@/components/empty-state"
 
 export default async function StatisticsPage() {
-  const user = await requireCurrentUser()
+  await requireCurrentUser()
   const workspace = await getCurrentWorkspace()
   if (!workspace) return null
 
+  const t = await getTranslations("statistics")
+  const locale = await getLocale()
   const stats = await getStats(workspace.id)
   const deliveryRate = stats.sent > 0 ? ((stats.delivered / stats.sent) * 100).toFixed(1) : "0"
   const openRate = stats.delivered > 0 ? ((stats.opened / stats.delivered) * 100).toFixed(1) : "0"
@@ -18,40 +22,47 @@ export default async function StatisticsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold">Email statistics</h2>
-        <p className="text-sm text-muted-foreground">
-          Performance metrics for your workspace.
-        </p>
+        <h2 className="text-lg font-semibold">{t("title")}</h2>
+        <p className="text-sm text-muted-foreground">{t("description")}</p>
       </div>
+
+      {stats.messages === 0 ? (
+        <EmptyState
+          title={t("emptyTitle")}
+          description={t("emptyDescription")}
+          actionLabel={t("openSettings")}
+          href="/settings"
+        />
+      ) : null}
 
       <StatCards
         stats={[
-          { label: "Total sent", value: stats.sent },
-          { label: "Delivered", value: stats.delivered, description: `${deliveryRate}% delivery rate` },
-          { label: "Opened", value: stats.opened, description: `${openRate}% open rate` },
-          { label: "Clicked", value: stats.clicked, description: `${clickRate}% click rate` },
-          { label: "Failed", value: stats.failed },
-          { label: "Inbound", value: stats.inbox },
-          { label: "Replied", value: stats.replied },
-          { label: "Drafts", value: stats.drafts },
+          { label: t("totalSent"), value: stats.sent },
+          { label: t("delivered"), value: stats.delivered, description: t("deliveryRate", { rate: deliveryRate }) },
+          { label: t("opened"), value: stats.opened, description: t("openRate", { rate: openRate }) },
+          { label: t("clicked"), value: stats.clicked, description: t("clickRate", { rate: clickRate }) },
+          { label: t("failed"), value: stats.failed },
+          { label: t("inbound"), value: stats.inbox },
+          { label: t("replied"), value: stats.replied },
+          { label: t("avgResponse"), value: stats.avgResponseMinutes != null ? `${stats.avgResponseMinutes}m` : "—" },
         ]}
       />
 
-      <Card className="border-border/80 bg-white/90">
+      <Card className="border-border/80">
         <CardHeader>
-          <CardTitle className="text-lg">Recent events</CardTitle>
+          <CardTitle className="text-lg">{t("recentEvents")}</CardTitle>
         </CardHeader>
         <CardContent>
           {stats.recentEvents.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No events recorded yet.</p>
+            <p className="text-sm text-muted-foreground">{t("noEvents")}</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
-                    <th className="pb-3 pr-4">Type</th>
-                    <th className="pb-3 pr-4">Message</th>
-                    <th className="pb-3">Date</th>
+                    <th className="pb-3 pr-4">{t("type")}</th>
+                    <th className="pb-3 pr-4">{t("message")}</th>
+                    <th className="pb-3">{t("date")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -63,9 +74,7 @@ export default async function StatisticsPage() {
                       <td className="py-3 pr-4 font-mono text-xs text-muted-foreground">
                         {event.messageId.slice(0, 16)}…
                       </td>
-                      <td className="py-3 text-xs text-muted-foreground">
-                        {formatDate(event.createdAt)}
-                      </td>
+                      <td className="py-3 text-xs text-muted-foreground">{formatDate(event.createdAt, locale)}</td>
                     </tr>
                   ))}
                 </tbody>

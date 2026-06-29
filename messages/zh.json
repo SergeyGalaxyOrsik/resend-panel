@@ -19,7 +19,14 @@
     "lastActivity": "最近活动",
     "noMessages": "暂无消息。",
     "searchPlaceholder": "按主题或邮箱搜索",
-    "noSearchResults": "未找到匹配的消息。"
+    "noSearchResults": "未找到匹配的消息。",
+    "columnSubject": "主题",
+    "columnFrom": "发件人",
+    "columnTo": "收件人",
+    "columnParticipants": "参与者",
+    "columnStatus": "状态",
+    "columnActions": "操作",
+    "viewDetails": "查看详情"
   },
   "nav": {
     "mail": "邮件",

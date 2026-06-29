@@ -19,7 +19,14 @@
     "lastActivity": "Последняя активность",
     "noMessages": "Нет сообщений.",
     "searchPlaceholder": "Поиск по теме или email",
-    "noSearchResults": "Ничего не найдено."
+    "noSearchResults": "Ничего не найдено.",
+    "columnSubject": "Тема",
+    "columnFrom": "От",
+    "columnTo": "Кому",
+    "columnParticipants": "Участники",
+    "columnStatus": "Статус",
+    "columnActions": "Действия",
+    "viewDetails": "Открыть"
   },
   "nav": {
     "mail": "Почта",

@@ -19,7 +19,14 @@
     "lastActivity": "Last activity",
     "noMessages": "No messages.",
     "searchPlaceholder": "Search by subject or email",
-    "noSearchResults": "No messages match your search."
+    "noSearchResults": "No messages match your search.",
+    "columnSubject": "Subject",
+    "columnFrom": "From",
+    "columnTo": "To",
+    "columnParticipants": "Participants",
+    "columnStatus": "Status",
+    "columnActions": "Actions",
+    "viewDetails": "View details"
   },
   "nav": {
     "mail": "Mail",

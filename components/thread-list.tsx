@@ -2,13 +2,26 @@
 
 import { useMemo, useState } from "react"
 import { useLocale, useTranslations } from "next-intl"
-import { Link } from "@/i18n/navigation"
 import type { Thread } from "@/lib/types"
 import { formatDate } from "@/lib/format"
 import { threadMatchesSearch } from "@/lib/mail-search"
 import { Badge } from "@/components/ui/badge"
 import { MailSearchInput } from "@/components/mail-search-input"
 import { SortToggle, type SortOrder } from "@/components/sort-toggle"
+import {
+  EmailsTable,
+  EmailsTableBody,
+  EmailsTableCell,
+  EmailsTableHead,
+  EmailsTableHeader,
+  EmailsTableRow,
+  ViewEmailAction,
+} from "@/components/emails-table"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 type ThreadListProps = {
   threads: Thread[]
@@ -37,40 +50,52 @@ export function ThreadList({ threads }: ThreadListProps) {
       </div>
 
       {sortedThreads.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border/70 bg-white/80 p-12 text-center text-sm text-muted-foreground">
+        <div className="rounded-lg border border-dashed border-border/70 bg-card p-12 text-center text-sm text-muted-foreground">
           {tm("noSearchResults")}
         </div>
       ) : (
-      <div className="min-w-0 space-y-2">
-        {sortedThreads.map((thread) => (
-          <Link
-            key={thread.id}
-            href={`/inbox/${thread.id}`}
-            className="flex min-w-0 items-start justify-between gap-4 rounded-xl border border-border/60 bg-card px-5 py-4 transition-colors hover:bg-muted/50"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate text-sm font-medium">{thread.subject}</span>
-                <Badge className="shrink-0 text-xs">
-                  {t("participants", { count: thread.participants.length })}
-                </Badge>
-              </div>
-              <p className="mt-1 truncate text-sm text-muted-foreground">{thread.participants.join(", ")}</p>
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                {tm("lastActivity")}
-              </p>
-              <time
-                dateTime={thread.lastMessageAt}
-                className="mt-0.5 block whitespace-nowrap text-xs tabular-nums text-foreground"
-              >
-                {formatDate(thread.lastMessageAt, locale)}
-              </time>
-            </div>
-          </Link>
-        ))}
-      </div>
+        <EmailsTable>
+          <EmailsTableHeader>
+            <EmailsTableHead>{tm("columnSubject")}</EmailsTableHead>
+            <EmailsTableHead>{tm("columnParticipants")}</EmailsTableHead>
+            <EmailsTableHead className="w-[160px]">{tm("lastActivity")}</EmailsTableHead>
+            <EmailsTableHead className="w-[100px]">{tm("columnActions")}</EmailsTableHead>
+          </EmailsTableHeader>
+          <EmailsTableBody>
+            {sortedThreads.map((thread) => (
+              <EmailsTableRow key={thread.id}>
+                <EmailsTableCell className="max-w-[280px] font-medium">
+                  <span className="block truncate">{thread.subject}</span>
+                </EmailsTableCell>
+                <EmailsTableCell className="max-w-[320px] text-sm text-muted-foreground">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="block cursor-help truncate">
+                        {thread.participants.join(", ")}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-md">
+                      {thread.participants.join(", ")}
+                    </TooltipContent>
+                  </Tooltip>
+                </EmailsTableCell>
+                <EmailsTableCell className="text-sm text-muted-foreground">
+                  <div className="flex flex-col gap-1">
+                    <Badge variant="outline" className="w-fit border-0 bg-muted text-muted-foreground">
+                      {t("participants", { count: thread.participants.length })}
+                    </Badge>
+                    <time dateTime={thread.lastMessageAt} className="tabular-nums">
+                      {formatDate(thread.lastMessageAt, locale)}
+                    </time>
+                  </div>
+                </EmailsTableCell>
+                <EmailsTableCell>
+                  <ViewEmailAction href={`/inbox/${thread.id}`} />
+                </EmailsTableCell>
+              </EmailsTableRow>
+            ))}
+          </EmailsTableBody>
+        </EmailsTable>
       )}
     </div>
   )

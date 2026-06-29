@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/supabase"
 import { createToken } from "@/lib/crypto"
 import type {
   Draft,
@@ -14,8 +14,8 @@ import type {
 // ── Bootstrap ──────────────────────────────────────────────
 
 export async function getBootstrapState() {
-  const { data: users } = await supabase.from("users").select("id").limit(1)
-  const { data: workspaces } = await supabase.from("workspaces").select("id").limit(1)
+  const { data: users } = await getSupabase().from("users").select("id").limit(1)
+  const { data: workspaces } = await getSupabase().from("workspaces").select("id").limit(1)
 
   return {
     hasUsers: (users?.length ?? 0) > 0,
@@ -28,13 +28,13 @@ export async function getBootstrapState() {
 // ── Users ──────────────────────────────────────────────────
 
 export async function findUserByEmail(email: string) {
-  const { data } = await supabase.from("users").select("*").eq("email", email).single()
+  const { data } = await getSupabase().from("users").select("*").eq("email", email).single()
   if (!data) return null
   return mapUser(data)
 }
 
 export async function findUserById(userId: string) {
-  const { data } = await supabase.from("users").select("*").eq("id", userId).single()
+  const { data } = await getSupabase().from("users").select("*").eq("id", userId).single()
   if (!data) return null
   return mapUser(data)
 }
@@ -47,7 +47,7 @@ export async function createUser(email: string, passwordHash: string) {
     createdAt: new Date().toISOString(),
   }
 
-  await supabase.from("users").insert({
+  await getSupabase().from("users").insert({
     id: user.id,
     email: user.email,
     password_hash: user.passwordHash,
@@ -67,14 +67,14 @@ export async function createWorkspaceForOwner(owner: User, name?: string) {
     createdAt: new Date().toISOString(),
   }
 
-  await supabase.from("workspaces").insert({
+  await getSupabase().from("workspaces").insert({
     id: workspace.id,
     name: workspace.name,
     owner_user_id: workspace.ownerUserId,
     created_at: workspace.createdAt,
   })
 
-  await supabase.from("resend_settings").insert({
+  await getSupabase().from("resend_settings").insert({
     id: createToken("settings"),
     workspace_id: workspace.id,
     token_encrypted: "",
@@ -88,7 +88,7 @@ export async function createWorkspaceForOwner(owner: User, name?: string) {
 }
 
 export async function getCurrentWorkspace() {
-  const { data } = await supabase.from("workspaces").select("*").limit(1).single()
+  const { data } = await getSupabase().from("workspaces").select("*").limit(1).single()
   if (!data) return null
   return mapWorkspace(data)
 }
@@ -96,7 +96,7 @@ export async function getCurrentWorkspace() {
 // ── Sessions ───────────────────────────────────────────────
 
 export async function createSession(userId: string) {
-  await supabase.from("sessions").delete().eq("user_id", userId)
+  await getSupabase().from("sessions").delete().eq("user_id", userId)
 
   const session: Session = {
     id: createToken("session"),
@@ -105,7 +105,7 @@ export async function createSession(userId: string) {
     expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString(),
   }
 
-  await supabase.from("sessions").insert({
+  await getSupabase().from("sessions").insert({
     id: session.id,
     user_id: session.userId,
     created_at: session.createdAt,
@@ -116,19 +116,19 @@ export async function createSession(userId: string) {
 }
 
 export async function findSession(sessionToken: string) {
-  const { data } = await supabase.from("sessions").select("*").eq("id", sessionToken).single()
+  const { data } = await getSupabase().from("sessions").select("*").eq("id", sessionToken).single()
   if (!data) return null
   return mapSession(data)
 }
 
 export async function revokeSession(sessionId: string) {
-  await supabase.from("sessions").delete().eq("id", sessionId)
+  await getSupabase().from("sessions").delete().eq("id", sessionId)
 }
 
 // ── Settings ───────────────────────────────────────────────
 
 export async function getCurrentSettings() {
-  const { data } = await supabase.from("resend_settings").select("*").limit(1).single()
+  const { data } = await getSupabase().from("resend_settings").select("*").limit(1).single()
   if (!data) return null
   return mapSettings(data)
 }
@@ -136,7 +136,7 @@ export async function getCurrentSettings() {
 export async function updateResendSettings(
   updater: Partial<Pick<ResendSettings, "tokenEncrypted" | "fromName" | "fromEmail" | "inboundEmail">>
 ) {
-  const { data: current } = await supabase.from("resend_settings").select("*").limit(1).single()
+  const { data: current } = await getSupabase().from("resend_settings").select("*").limit(1).single()
   if (!current) throw new Error("Workspace settings are missing.")
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
@@ -145,7 +145,7 @@ export async function updateResendSettings(
   if (updater.fromEmail !== undefined) updates.from_email = updater.fromEmail
   if (updater.inboundEmail !== undefined) updates.inbound_email = updater.inboundEmail
 
-  await supabase.from("resend_settings").update(updates).eq("id", current.id)
+  await getSupabase().from("resend_settings").update(updates).eq("id", current.id)
 
   return mapSettings({ ...current, ...updates })
 }
@@ -156,7 +156,7 @@ export async function ensureThread(workspaceId: string, subject: string, partici
   const normalizedSubject = subject.trim() || "No subject"
   const uniqueParticipants = Array.from(new Set(participants))
 
-  const { data: existing } = await supabase
+  const { data: existing } = await getSupabase()
     .from("threads")
     .select("*")
     .eq("workspace_id", workspaceId)
@@ -165,7 +165,7 @@ export async function ensureThread(workspaceId: string, subject: string, partici
 
   if (existing) {
     const mergedParticipants = Array.from(new Set([...(existing.participants || []), ...uniqueParticipants]))
-    await supabase
+    await getSupabase()
       .from("threads")
       .update({
         participants: mergedParticipants,
@@ -187,7 +187,7 @@ export async function ensureThread(workspaceId: string, subject: string, partici
     lastMessageAt: new Date().toISOString(),
   }
 
-  await supabase.from("threads").insert({
+  await getSupabase().from("threads").insert({
     id: thread.id,
     workspace_id: thread.workspaceId,
     subject: thread.subject,
@@ -201,7 +201,7 @@ export async function ensureThread(workspaceId: string, subject: string, partici
 }
 
 export async function listThreads(workspaceId: string) {
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from("threads")
     .select("*")
     .eq("workspace_id", workspaceId)
@@ -211,7 +211,7 @@ export async function listThreads(workspaceId: string) {
 }
 
 export async function getThreadWithMessages(workspaceId: string, threadId: string) {
-  const { data: threadData } = await supabase
+  const { data: threadData } = await getSupabase()
     .from("threads")
     .select("*")
     .eq("workspace_id", workspaceId)
@@ -220,7 +220,7 @@ export async function getThreadWithMessages(workspaceId: string, threadId: strin
 
   if (!threadData) return null
 
-  const { data: messagesData } = await supabase
+  const { data: messagesData } = await getSupabase()
     .from("messages")
     .select("*")
     .eq("workspace_id", workspaceId)
@@ -245,7 +245,7 @@ export async function createMessage(
     ...payload,
   }
 
-  await supabase.from("messages").insert({
+  await getSupabase().from("messages").insert({
     id: message.id,
     workspace_id: message.workspaceId,
     thread_id: message.threadId,
@@ -280,7 +280,7 @@ export async function updateMessage(messageId: string, updater: Partial<Message>
   if (updater.html !== undefined) updates.html = updater.html
   if (updater.text !== undefined) updates.text = updater.text
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("messages")
     .update(updates)
     .eq("id", messageId)
@@ -292,7 +292,7 @@ export async function updateMessage(messageId: string, updater: Partial<Message>
 }
 
 export async function listMessages(workspaceId: string, direction?: Message["direction"]) {
-  let query = supabase
+  let query = getSupabase()
     .from("messages")
     .select("*")
     .eq("workspace_id", workspaceId)
@@ -323,7 +323,7 @@ export async function createEvent(
     createdAt: new Date().toISOString(),
   }
 
-  await supabase.from("message_events").insert({
+  await getSupabase().from("message_events").insert({
     id: event.id,
     workspace_id: event.workspaceId,
     message_id: event.messageId,
@@ -342,7 +342,7 @@ export async function upsertDraft(
   draft: Pick<Draft, "subject" | "to" | "cc" | "bcc" | "text"> & { id?: string; threadId?: string }
 ) {
   if (draft.id) {
-    const { data: existing } = await supabase
+    const { data: existing } = await getSupabase()
       .from("drafts")
       .select("*")
       .eq("id", draft.id)
@@ -350,7 +350,7 @@ export async function upsertDraft(
       .single()
 
     if (existing) {
-      await supabase
+      await getSupabase()
         .from("drafts")
         .update({
           subject: draft.subject,
@@ -379,7 +379,7 @@ export async function upsertDraft(
     updatedAt: new Date().toISOString(),
   }
 
-  await supabase.from("drafts").insert({
+  await getSupabase().from("drafts").insert({
     id: item.id,
     workspace_id: item.workspaceId,
     thread_id: item.threadId,
@@ -395,11 +395,11 @@ export async function upsertDraft(
 }
 
 export async function deleteDraft(draftId: string) {
-  await supabase.from("drafts").delete().eq("id", draftId)
+  await getSupabase().from("drafts").delete().eq("id", draftId)
 }
 
 export async function listDrafts(workspaceId: string) {
-  const { data } = await supabase
+  const { data } = await getSupabase()
     .from("drafts")
     .select("*")
     .eq("workspace_id", workspaceId)
@@ -411,12 +411,12 @@ export async function listDrafts(workspaceId: string) {
 // ── Stats ──────────────────────────────────────────────────
 
 export async function getStats(workspaceId: string) {
-  const { data: messages } = await supabase
+  const { data: messages } = await getSupabase()
     .from("messages")
     .select("*")
     .eq("workspace_id", workspaceId)
 
-  const { data: events } = await supabase
+  const { data: events } = await getSupabase()
     .from("message_events")
     .select("*")
     .eq("workspace_id", workspaceId)

@@ -56,6 +56,18 @@ Open [http://localhost:3000](http://localhost:3000). The first account you creat
 | `APP_SECRET` | Yes | Encryption key for API tokens. Generate with `openssl rand -hex 32` |
 | `NODE_ENV` | No | Set to `production` in deployed environments |
 
+### Database
+
+This project uses Supabase (Postgres). You can use a hosted Supabase project or run locally:
+
+```bash
+# Install Supabase CLI (if using local dev)
+npx supabase init
+npx supabase start
+```
+
+The migration is at `supabase/migrations/001_initial_schema.sql`. Apply it through the Supabase dashboard or CLI.
+
 ### Resend Setup
 
 1. Create a [Resend](https://resend.com) account

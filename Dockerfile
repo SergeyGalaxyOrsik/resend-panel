@@ -30,9 +30,16 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY supabase/migrations ./supabase/migrations
+COPY scripts/run-migrations.mjs ./scripts/run-migrations.mjs
+COPY docker-entrypoint.sh ./docker-entrypoint.sh
+
+RUN npm install --no-save pg && \
+    chmod +x docker-entrypoint.sh && \
+    chown -R nextjs:nodejs /app/supabase /app/scripts /app/docker-entrypoint.sh /app/node_modules
 
 USER nextjs
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+ENTRYPOINT ["./docker-entrypoint.sh"]

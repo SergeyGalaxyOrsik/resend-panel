@@ -40,15 +40,17 @@ Configure `.env`:
 |----------|----------|-------------|
 | `SUPABASE_URL` | Yes | Hosted Supabase project URL |
 | `SUPABASE_SECRET_KEY` | Yes | Server-only secret key (`SUPABASE_SERVICE_KEY` also supported) |
+| `DATABASE_URL` | Docker | Direct Postgres URI for startup migrations (Supabase → Database → Connection string) |
 | `APP_SECRET` | Yes | Encryption key. Generate with `openssl rand -hex 32` |
 | `RESEND_INBOUND_WEBHOOK_SECRET` | Prod | Signing secret for webhook → `/api/inbound` (`email.received`) |
 | `RESEND_EVENTS_WEBHOOK_SECRET` | Prod | Signing secret for webhook → `/api/events` (delivered, opened, …) |
 | `RESEND_WEBHOOK_SECRET` | Optional | Legacy fallback if both webhooks share one secret |
 
-Apply schema (via Supabase dashboard SQL or MCP):
+Apply schema manually or via Docker (migrations run automatically on container start):
 
 ```bash
-# SQL in supabase/migrations/001_initial_schema.sql
+bun run migrate
+# or: SQL in supabase/migrations/001_initial_schema.sql via Supabase dashboard
 ```
 
 Migrate legacy JSON data (optional):
@@ -79,6 +81,7 @@ docker build -t resend-panel .
 docker run --rm -p 3000:3000 \
   -e SUPABASE_URL=https://your-project.supabase.co \
   -e SUPABASE_SECRET_KEY=your-secret-key \
+  -e DATABASE_URL=postgresql://postgres.[ref]:[password]@db.[ref].supabase.co:5432/postgres \
   -e APP_SECRET=$(openssl rand -hex 32) \
   -e RESEND_INBOUND_WEBHOOK_SECRET=whsec_inbound_secret \
   -e RESEND_EVENTS_WEBHOOK_SECRET=whsec_events_secret \

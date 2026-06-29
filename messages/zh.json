@@ -73,14 +73,27 @@
     "emptyTitle": "暂无对话",
     "emptyDescription": "发送邮件或配置入站 webhook 以接收消息。",
     "participants": "{count, plural, other {# 位参与者}}",
-    "reply": "回复"
+    "reply": "回复",
+    "selectThreadTitle": "选择对话",
+    "selectThreadDescription": "从列表中选择一个对话以阅读消息。",
+    "backToInbox": "返回收件箱",
+    "forward": "转发",
+    "archive": "归档",
+    "delete": "删除",
+    "more": "更多",
+    "replyPlaceholder": "回复…"
   },
   "sent": {
     "title": "已发送消息",
     "messageCount": "{count, plural, other {# 条已发送消息}}",
     "emptyTitle": "暂无已发送消息",
     "emptyDescription": "撰写第一封邮件即可在此查看。",
-    "noMessages": "暂无消息。"
+    "noMessages": "暂无消息。",
+    "compose": "撰写",
+    "selectMessageTitle": "选择消息",
+    "selectMessageDescription": "从列表中选择一条已发送消息以查看详情。",
+    "backToSent": "返回已发送",
+    "viewThread": "查看对话"
   },
   "compose": {
     "newMessage": "新消息",

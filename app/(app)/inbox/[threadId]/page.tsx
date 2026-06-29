@@ -9,12 +9,12 @@ type Props = {
 
 export default async function ThreadPage({ params }: Props) {
   const { threadId } = await params
-  const user = await requireCurrentUser()
+  await requireCurrentUser()
   const workspace = await getCurrentWorkspace()
   if (!workspace) return null
 
   const result = await getThreadWithMessages(workspace.id, threadId)
   if (!result) notFound()
 
-  return <div className="min-w-0"><ThreadView thread={result.thread} messages={result.messages} /></div>
+  return <ThreadView thread={result.thread} messages={result.messages} variant="two-pane" />
 }

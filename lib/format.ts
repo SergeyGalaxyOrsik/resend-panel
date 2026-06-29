@@ -28,6 +28,24 @@ export function compareMessageTimestamps(
   return order === "asc" ? diff : -diff
 }
 
+export function formatCompactRelative(value: string, locale?: string) {
+  const date = new Date(value)
+  const diff = Date.now() - date.getTime()
+  const minutes = Math.max(1, Math.floor(diff / 60_000))
+
+  if (minutes < 60) return `${minutes}m`
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h`
+
+  const days = Math.floor(hours / 24)
+  if (days < 7) {
+    return new Intl.DateTimeFormat(locale ?? "en", { weekday: "short" }).format(date)
+  }
+
+  return new Intl.DateTimeFormat(locale ?? "en", { month: "short", day: "numeric" }).format(date)
+}
+
 export function formatRelative(value: string, locale?: string) {
   const diff = Date.now() - new Date(value).getTime()
   const minutes = Math.max(1, Math.floor(diff / 60_000))

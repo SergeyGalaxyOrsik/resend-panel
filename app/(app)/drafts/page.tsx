@@ -75,10 +75,13 @@ export default async function DraftsPage() {
                     {formatDate(draft.updatedAt, locale)}
                   </TableCell>
                   <TableCell className="h-16 px-4">
-                    <Button variant="outline" size="icon" className="h-8 w-8" asChild>
-                      <Link href={`/drafts/${draft.id}/edit`} aria-label={tm("viewDetails")}>
-                        <FileTextIcon className="size-4" />
-                      </Link>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      render={<Link href={`/drafts/${draft.id}/edit`} aria-label={tm("viewDetails")} />}
+                    >
+                      <FileTextIcon className="size-4" />
                     </Button>
                   </TableCell>
                 </TableRow>

@@ -73,14 +73,27 @@
     "emptyTitle": "Пока нет переписок",
     "emptyDescription": "Отправьте письмо или настройте входящие webhook для получения сообщений.",
     "participants": "{count, plural, one {# участник} few {# участника} many {# участников} other {# участника}}",
-    "reply": "Ответить"
+    "reply": "Ответить",
+    "selectThreadTitle": "Выберите переписку",
+    "selectThreadDescription": "Выберите переписку из списка, чтобы прочитать сообщения.",
+    "backToInbox": "Назад ко входящим",
+    "forward": "Переслать",
+    "archive": "В архив",
+    "delete": "Удалить",
+    "more": "Ещё",
+    "replyPlaceholder": "Ответить…"
   },
   "sent": {
     "title": "Отправленные сообщения",
     "messageCount": "{count, plural, one {# отправленное сообщение} few {# отправленных сообщения} many {# отправленных сообщений} other {# отправленных сообщения}}",
     "emptyTitle": "Нет отправленных сообщений",
     "emptyDescription": "Напишите первое письмо, чтобы увидеть его здесь.",
-    "noMessages": "Нет сообщений."
+    "noMessages": "Нет сообщений.",
+    "compose": "Написать",
+    "selectMessageTitle": "Выберите сообщение",
+    "selectMessageDescription": "Выберите отправленное сообщение из списка, чтобы просмотреть детали.",
+    "backToSent": "Назад к отправленным",
+    "viewThread": "Открыть переписку"
   },
   "compose": {
     "newMessage": "Новое сообщение",

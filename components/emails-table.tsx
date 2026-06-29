@@ -123,10 +123,13 @@ export function ViewEmailAction({ href }: { href: string }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="outline" size="icon" className="h-8 w-8" asChild>
-          <Link href={href} aria-label={t("viewDetails")}>
-            <FileTextIcon className="size-4" />
-          </Link>
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-8 w-8"
+          render={<Link href={href} aria-label={t("viewDetails")} />}
+        >
+          <FileTextIcon className="size-4" />
         </Button>
       </TooltipTrigger>
       <TooltipContent>{t("viewDetails")}</TooltipContent>

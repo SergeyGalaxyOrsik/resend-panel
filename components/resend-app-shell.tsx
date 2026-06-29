@@ -40,6 +40,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 import { isNavActive } from "@/lib/nav"
+import { cn } from "@/lib/utils"
 import type { Thread, User, Workspace } from "@/lib/types"
 import type { ReactNode } from "react"
 
@@ -158,33 +159,61 @@ export function ResendAppShell({
 
   function pageTitleFromPath(path: string) {
     if (path.startsWith("/inbox/")) return t("conversation")
+    if (path.startsWith("/sent/")) return t("sent")
     const match = mainNav.find((item) => item.href === path)
     return match?.label ?? tc("appName")
   }
 
   const title = pageTitleFromPath(pathname)
+  const isMailPaneRoute =
+    pathname === "/inbox" ||
+    pathname.startsWith("/inbox/") ||
+    pathname === "/sent" ||
+    pathname.startsWith("/sent/")
+
+  const mobilePaneTitle = pathname.startsWith("/sent") ? t("sent") : t("inbox")
 
   return (
-    <SidebarProvider defaultOpen className="overflow-x-hidden">
+    <SidebarProvider
+      defaultOpen
+      className={cn("overflow-x-hidden", isMailPaneRoute && "h-svh max-h-svh overflow-hidden")}
+    >
       <AppSidebar user={user} workspace={workspace} logoutAction={logoutAction} />
-      <SidebarInset className="min-w-0 overflow-x-hidden">
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-2 data-vertical:h-4 data-vertical:self-auto" />
-          <Breadcrumb className="flex-1">
-            <BreadcrumbList>
-              <BreadcrumbItem className="hidden md:block">
-                <BreadcrumbLink href="/dashboard">{tc("appName")}</BreadcrumbLink>
-              </BreadcrumbItem>
-              <BreadcrumbSeparator className="hidden md:block" />
-              <BreadcrumbItem>
-                <BreadcrumbPage>{title}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
-          <LanguageSwitcher />
-        </header>
-        <div className="flex min-w-0 max-w-full flex-1 flex-col gap-4 overflow-x-hidden p-4 md:p-6">{children}</div>
+      <SidebarInset
+        className={cn("min-w-0 overflow-x-hidden", isMailPaneRoute && "min-h-0 overflow-hidden")}
+      >
+        {!isMailPaneRoute ? (
+          <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+            <SidebarTrigger className="-ml-1" />
+            <Separator orientation="vertical" className="mr-2 data-vertical:h-4 data-vertical:self-auto" />
+            <Breadcrumb className="flex-1">
+              <BreadcrumbList>
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="/dashboard">{tc("appName")}</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>{title}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+            <LanguageSwitcher />
+          </header>
+        ) : (
+          <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4 md:hidden">
+            <SidebarTrigger className="-ml-1" />
+            <span className="flex-1 text-sm font-medium">{mobilePaneTitle}</span>
+            <LanguageSwitcher />
+          </header>
+        )}
+        <div
+          className={cn(
+            "flex min-w-0 max-w-full flex-1 flex-col overflow-x-hidden",
+            isMailPaneRoute ? "min-h-0 overflow-hidden p-0" : "gap-4 p-4 md:p-6"
+          )}
+        >
+          {children}
+        </div>
       </SidebarInset>
     </SidebarProvider>
   )

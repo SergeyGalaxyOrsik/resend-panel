@@ -236,6 +236,27 @@ export async function listThreads(workspaceId: string) {
   return (data || []).map(mapThread)
 }
 
+export async function getThreadPreviews(workspaceId: string) {
+  const { data } = await supabase
+    .from("messages")
+    .select("thread_id, text, from_email")
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false })
+
+  const previews: Record<string, { text: string; fromEmail: string }> = {}
+
+  for (const row of data || []) {
+    const threadId = row.thread_id as string
+    if (previews[threadId]) continue
+    previews[threadId] = {
+      text: (row.text as string).replace(/\s+/g, " ").trim(),
+      fromEmail: row.from_email as string,
+    }
+  }
+
+  return previews
+}
+
 export async function refreshAllThreadLastMessageAt(workspaceId: string) {
   const { data: threads } = await supabase.from("threads").select("id").eq("workspace_id", workspaceId)
   if (!threads?.length) return
@@ -381,6 +402,18 @@ export async function listMessages(workspaceId: string, direction?: Message["dir
   const messages = (data || []).map(mapMessage)
 
   return messages.sort((a, b) => compareMessagesByTimestamp(a, b, "desc"))
+}
+
+export async function getMessage(workspaceId: string, messageId: string) {
+  const { data } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("id", messageId)
+    .maybeSingle()
+
+  if (!data) return null
+  return mapMessage(data)
 }
 
 function compareMessagesByTimestamp(a: Message, b: Message, order: "asc" | "desc") {

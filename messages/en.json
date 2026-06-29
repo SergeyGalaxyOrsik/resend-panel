@@ -73,14 +73,27 @@
     "emptyTitle": "No conversations yet",
     "emptyDescription": "Send an email or configure inbound webhooks to receive messages.",
     "participants": "{count, plural, one {# participant} other {# participants}}",
-    "reply": "Reply"
+    "reply": "Reply",
+    "selectThreadTitle": "Select a conversation",
+    "selectThreadDescription": "Choose a thread from the list to read messages.",
+    "backToInbox": "Back to inbox",
+    "forward": "Forward",
+    "archive": "Archive",
+    "delete": "Delete",
+    "more": "More",
+    "replyPlaceholder": "Reply…"
   },
   "sent": {
     "title": "Sent messages",
     "messageCount": "{count, plural, one {# sent message} other {# sent messages}}",
     "emptyTitle": "No sent messages",
     "emptyDescription": "Compose your first email to see it here.",
-    "noMessages": "No messages."
+    "noMessages": "No messages.",
+    "compose": "Compose",
+    "selectMessageTitle": "Select a message",
+    "selectMessageDescription": "Choose a sent message from the list to view details.",
+    "backToSent": "Back to sent",
+    "viewThread": "View thread"
   },
   "compose": {
     "newMessage": "New message",

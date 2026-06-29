@@ -1,8 +1,6 @@
-import { promises as fs } from "node:fs"
-import path from "node:path"
+import { supabase } from "@/lib/supabase"
 import { createToken } from "@/lib/crypto"
 import type {
-  AppStore,
   Draft,
   Message,
   MessageEvent,
@@ -13,279 +11,302 @@ import type {
   Workspace,
 } from "@/lib/types"
 
-const STORE_DIR = path.join(process.cwd(), ".data")
-const STORE_PATH = path.join(STORE_DIR, "resend-panel.json")
-
-const emptyStore = (): AppStore => ({
-  users: [],
-  workspaces: [],
-  sessions: [],
-  settings: null,
-  threads: [],
-  messages: [],
-  events: [],
-  drafts: [],
-})
-
-let writeQueue: Promise<unknown> = Promise.resolve()
-
-async function ensureStoreFile() {
-  await fs.mkdir(STORE_DIR, { recursive: true })
-  try {
-    await fs.access(STORE_PATH)
-  } catch {
-    await fs.writeFile(STORE_PATH, JSON.stringify(emptyStore(), null, 2), "utf8")
-  }
-}
-
-export async function readStore(): Promise<AppStore> {
-  await ensureStoreFile()
-  const raw = await fs.readFile(STORE_PATH, "utf8")
-
-  try {
-    const parsed = JSON.parse(raw) as Partial<AppStore>
-    return {
-      ...emptyStore(),
-      ...parsed,
-      settings: parsed.settings ?? null,
-    }
-  } catch {
-    const initial = emptyStore()
-    await fs.writeFile(STORE_PATH, JSON.stringify(initial, null, 2), "utf8")
-    return initial
-  }
-}
-
-export async function updateStore<T>(
-  mutator: (store: AppStore) => Promise<T> | T
-): Promise<T> {
-  const run = async () => {
-    const store = await readStore()
-    const result = await mutator(store)
-    await fs.writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8")
-    return result
-  }
-
-  writeQueue = writeQueue.then(run, run)
-  return writeQueue as Promise<T>
-}
+// ── Bootstrap ──────────────────────────────────────────────
 
 export async function getBootstrapState() {
-  const store = await readStore()
+  const { data: users } = await supabase.from("users").select("id").limit(1)
+  const { data: workspaces } = await supabase.from("workspaces").select("id").limit(1)
+
   return {
-    hasUsers: store.users.length > 0,
-    hasWorkspace: store.workspaces.length > 0,
-    owner: store.users[0] ?? null,
-    workspace: store.workspaces[0] ?? null,
+    hasUsers: (users?.length ?? 0) > 0,
+    hasWorkspace: (workspaces?.length ?? 0) > 0,
+    owner: null as User | null,
+    workspace: null as Workspace | null,
   }
 }
 
-export async function createWorkspaceForOwner(owner: User, name?: string) {
-  return updateStore((store) => {
-    const workspace: Workspace = {
-      id: createToken("ws"),
-      ownerUserId: owner.id,
-      name: name || "Primary workspace",
-      createdAt: new Date().toISOString(),
-    }
-
-    store.workspaces = [workspace]
-    store.settings = {
-      id: createToken("settings"),
-      workspaceId: workspace.id,
-      tokenEncrypted: "",
-      fromName: "Resend Panel",
-      fromEmail: "onboarding@resend.dev",
-      inboundEmail: `inbox@${workspace.id.slice(0, 8)}.local`,
-      updatedAt: new Date().toISOString(),
-    }
-
-    return workspace
-  })
-}
-
-export async function createSession(userId: string) {
-  return updateStore((store) => {
-    const session: Session = {
-      id: createToken("session"),
-      userId,
-      createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString(),
-    }
-
-    store.sessions = store.sessions.filter((item) => item.userId !== userId)
-    store.sessions.push(session)
-    return session
-  })
-}
-
-export async function revokeSession(sessionId: string) {
-  await updateStore((store) => {
-    store.sessions = store.sessions.filter((item) => item.id !== sessionId)
-  })
-}
-
-export async function findSession(sessionToken: string) {
-  const store = await readStore()
-  return store.sessions.find((item) => item.id === sessionToken) ?? null
-}
+// ── Users ──────────────────────────────────────────────────
 
 export async function findUserByEmail(email: string) {
-  const store = await readStore()
-  return store.users.find((item) => item.email === email) ?? null
+  const { data } = await supabase.from("users").select("*").eq("email", email).single()
+  if (!data) return null
+  return mapUser(data)
 }
 
 export async function findUserById(userId: string) {
-  const store = await readStore()
-  return store.users.find((item) => item.id === userId) ?? null
+  const { data } = await supabase.from("users").select("*").eq("id", userId).single()
+  if (!data) return null
+  return mapUser(data)
 }
 
 export async function createUser(email: string, passwordHash: string) {
-  return updateStore((store) => {
-    const user: User = {
-      id: createToken("user"),
-      email,
-      passwordHash,
-      createdAt: new Date().toISOString(),
-    }
+  const user: User = {
+    id: createToken("user"),
+    email,
+    passwordHash,
+    createdAt: new Date().toISOString(),
+  }
 
-    store.users.push(user)
-    return user
+  await supabase.from("users").insert({
+    id: user.id,
+    email: user.email,
+    password_hash: user.passwordHash,
+    created_at: user.createdAt,
   })
+
+  return user
+}
+
+// ── Workspaces ─────────────────────────────────────────────
+
+export async function createWorkspaceForOwner(owner: User, name?: string) {
+  const workspace: Workspace = {
+    id: createToken("ws"),
+    ownerUserId: owner.id,
+    name: name || "Primary workspace",
+    createdAt: new Date().toISOString(),
+  }
+
+  await supabase.from("workspaces").insert({
+    id: workspace.id,
+    name: workspace.name,
+    owner_user_id: workspace.ownerUserId,
+    created_at: workspace.createdAt,
+  })
+
+  await supabase.from("resend_settings").insert({
+    id: createToken("settings"),
+    workspace_id: workspace.id,
+    token_encrypted: "",
+    from_name: "Resend Panel",
+    from_email: "onboarding@resend.dev",
+    inbound_email: `inbox@${workspace.id.slice(0, 8)}.local`,
+    updated_at: new Date().toISOString(),
+  })
+
+  return workspace
 }
 
 export async function getCurrentWorkspace() {
-  const store = await readStore()
-  return store.workspaces[0] ?? null
+  const { data } = await supabase.from("workspaces").select("*").limit(1).single()
+  if (!data) return null
+  return mapWorkspace(data)
 }
 
+// ── Sessions ───────────────────────────────────────────────
+
+export async function createSession(userId: string) {
+  await supabase.from("sessions").delete().eq("user_id", userId)
+
+  const session: Session = {
+    id: createToken("session"),
+    userId,
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString(),
+  }
+
+  await supabase.from("sessions").insert({
+    id: session.id,
+    user_id: session.userId,
+    created_at: session.createdAt,
+    expires_at: session.expiresAt,
+  })
+
+  return session
+}
+
+export async function findSession(sessionToken: string) {
+  const { data } = await supabase.from("sessions").select("*").eq("id", sessionToken).single()
+  if (!data) return null
+  return mapSession(data)
+}
+
+export async function revokeSession(sessionId: string) {
+  await supabase.from("sessions").delete().eq("id", sessionId)
+}
+
+// ── Settings ───────────────────────────────────────────────
+
 export async function getCurrentSettings() {
-  const store = await readStore()
-  return store.settings
+  const { data } = await supabase.from("resend_settings").select("*").limit(1).single()
+  if (!data) return null
+  return mapSettings(data)
 }
 
 export async function updateResendSettings(
   updater: Partial<Pick<ResendSettings, "tokenEncrypted" | "fromName" | "fromEmail" | "inboundEmail">>
 ) {
-  return updateStore((store) => {
-    if (!store.settings) {
-      throw new Error("Workspace settings are missing.")
-    }
+  const { data: current } = await supabase.from("resend_settings").select("*").limit(1).single()
+  if (!current) throw new Error("Workspace settings are missing.")
 
-    store.settings = {
-      ...store.settings,
-      ...updater,
-      updatedAt: new Date().toISOString(),
-    }
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (updater.tokenEncrypted !== undefined) updates.token_encrypted = updater.tokenEncrypted
+  if (updater.fromName !== undefined) updates.from_name = updater.fromName
+  if (updater.fromEmail !== undefined) updates.from_email = updater.fromEmail
+  if (updater.inboundEmail !== undefined) updates.inbound_email = updater.inboundEmail
 
-    return store.settings
-  })
+  await supabase.from("resend_settings").update(updates).eq("id", current.id)
+
+  return mapSettings({ ...current, ...updates })
 }
+
+// ── Threads ────────────────────────────────────────────────
 
 export async function ensureThread(workspaceId: string, subject: string, participants: string[]) {
-  return updateStore((store) => {
-    const normalizedSubject = subject.trim() || "No subject"
-    const existing = store.threads.find(
-      (thread) =>
-        thread.workspaceId === workspaceId &&
-        thread.subject.toLowerCase() === normalizedSubject.toLowerCase()
-    )
+  const normalizedSubject = subject.trim() || "No subject"
+  const uniqueParticipants = Array.from(new Set(participants))
 
-    if (existing) {
-      existing.participants = Array.from(new Set([...existing.participants, ...participants]))
-      existing.updatedAt = new Date().toISOString()
-      existing.lastMessageAt = existing.updatedAt
-      return existing
-    }
+  const { data: existing } = await supabase
+    .from("threads")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .ilike("subject", normalizedSubject)
+    .single()
 
-    const thread: Thread = {
-      id: createToken("thread"),
-      workspaceId,
-      subject: normalizedSubject,
-      participants: Array.from(new Set(participants)),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      lastMessageAt: new Date().toISOString(),
-    }
+  if (existing) {
+    const mergedParticipants = Array.from(new Set([...(existing.participants || []), ...uniqueParticipants]))
+    await supabase
+      .from("threads")
+      .update({
+        participants: mergedParticipants,
+        updated_at: new Date().toISOString(),
+        last_message_at: new Date().toISOString(),
+      })
+      .eq("id", existing.id)
 
-    store.threads.unshift(thread)
-    return thread
+    return mapThread({ ...existing, participants: mergedParticipants, updated_at: new Date().toISOString(), last_message_at: new Date().toISOString() })
+  }
+
+  const thread: Thread = {
+    id: createToken("thread"),
+    workspaceId,
+    subject: normalizedSubject,
+    participants: uniqueParticipants,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    lastMessageAt: new Date().toISOString(),
+  }
+
+  await supabase.from("threads").insert({
+    id: thread.id,
+    workspace_id: thread.workspaceId,
+    subject: thread.subject,
+    participants: thread.participants,
+    created_at: thread.createdAt,
+    updated_at: thread.updatedAt,
+    last_message_at: thread.lastMessageAt,
   })
+
+  return thread
 }
 
-export async function upsertDraft(
-  workspaceId: string,
-  draft: Pick<Draft, "subject" | "to" | "cc" | "bcc" | "text"> & { id?: string; threadId?: string }
-) {
-  return updateStore((store) => {
-    const existing = draft.id
-      ? store.drafts.find((item) => item.id === draft.id && item.workspaceId === workspaceId)
-      : null
+export async function listThreads(workspaceId: string) {
+  const { data } = await supabase
+    .from("threads")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("last_message_at", { ascending: false })
 
-    if (existing) {
-      existing.subject = draft.subject
-      existing.to = draft.to
-      existing.cc = draft.cc
-      existing.bcc = draft.bcc
-      existing.text = draft.text
-      existing.updatedAt = new Date().toISOString()
-      existing.threadId = draft.threadId
-      return existing
-    }
-
-    const item: Draft = {
-      id: createToken("draft"),
-      workspaceId,
-      threadId: draft.threadId,
-      subject: draft.subject,
-      to: draft.to,
-      cc: draft.cc,
-      bcc: draft.bcc,
-      text: draft.text,
-      updatedAt: new Date().toISOString(),
-    }
-
-    store.drafts.unshift(item)
-    return item
-  })
+  return (data || []).map(mapThread)
 }
 
-export async function deleteDraft(draftId: string) {
-  await updateStore((store) => {
-    store.drafts = store.drafts.filter((draft) => draft.id !== draftId)
-  })
+export async function getThreadWithMessages(workspaceId: string, threadId: string) {
+  const { data: threadData } = await supabase
+    .from("threads")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("id", threadId)
+    .single()
+
+  if (!threadData) return null
+
+  const { data: messagesData } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("thread_id", threadId)
+    .order("created_at", { ascending: true })
+
+  return {
+    thread: mapThread(threadData),
+    messages: (messagesData || []).map(mapMessage),
+  }
 }
+
+// ── Messages ───────────────────────────────────────────────
 
 export async function createMessage(
   payload: Omit<Message, "id" | "createdAt" | "updatedAt"> & { id?: string }
 ) {
-  return updateStore((store) => {
-    const message: Message = {
-      id: payload.id ?? createToken("message"),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      ...payload,
-    }
+  const message: Message = {
+    id: payload.id ?? createToken("message"),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    ...payload,
+  }
 
-    store.messages.unshift(message)
-    return message
+  await supabase.from("messages").insert({
+    id: message.id,
+    workspace_id: message.workspaceId,
+    thread_id: message.threadId,
+    direction: message.direction,
+    status: message.status,
+    subject: message.subject,
+    from_name: message.fromName,
+    from_email: message.fromEmail,
+    to: message.to,
+    cc: message.cc,
+    bcc: message.bcc,
+    text: message.text,
+    html: message.html,
+    provider_id: message.providerId,
+    in_reply_to: message.inReplyTo,
+    references_list: message.references,
+    sent_at: message.sentAt,
+    received_at: message.receivedAt,
+    created_at: message.createdAt,
+    updated_at: message.updatedAt,
   })
+
+  return message
 }
 
 export async function updateMessage(messageId: string, updater: Partial<Message>) {
-  return updateStore((store) => {
-    const message = store.messages.find((item) => item.id === messageId)
-    if (!message) {
-      throw new Error("Message not found.")
-    }
+  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
-    Object.assign(message, updater, {
-      updatedAt: new Date().toISOString(),
-    })
+  if (updater.status !== undefined) updates.status = updater.status
+  if (updater.providerId !== undefined) updates.provider_id = updater.providerId
+  if (updater.sentAt !== undefined) updates.sent_at = updater.sentAt
+  if (updater.html !== undefined) updates.html = updater.html
+  if (updater.text !== undefined) updates.text = updater.text
 
-    return message
-  })
+  const { data, error } = await supabase
+    .from("messages")
+    .update(updates)
+    .eq("id", messageId)
+    .select()
+    .single()
+
+  if (error || !data) throw new Error("Message not found.")
+  return mapMessage(data)
 }
+
+export async function listMessages(workspaceId: string, direction?: Message["direction"]) {
+  let query = supabase
+    .from("messages")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false })
+
+  if (direction) {
+    query = query.eq("direction", direction)
+  }
+
+  const { data } = await query
+  return (data || []).map(mapMessage)
+}
+
+// ── Events ─────────────────────────────────────────────────
 
 export async function createEvent(
   workspaceId: string,
@@ -293,76 +314,233 @@ export async function createEvent(
   type: MessageEvent["type"],
   payload: Record<string, unknown>
 ) {
-  return updateStore((store) => {
-    const event: MessageEvent = {
-      id: createToken("event"),
-      workspaceId,
-      messageId,
-      type,
-      payload,
-      createdAt: new Date().toISOString(),
-    }
+  const event: MessageEvent = {
+    id: createToken("event"),
+    workspaceId,
+    messageId,
+    type,
+    payload,
+    createdAt: new Date().toISOString(),
+  }
 
-    store.events.unshift(event)
-    return event
+  await supabase.from("message_events").insert({
+    id: event.id,
+    workspace_id: event.workspaceId,
+    message_id: event.messageId,
+    type: event.type,
+    payload: event.payload,
+    created_at: event.createdAt,
   })
+
+  return event
 }
 
-export async function listMessages(workspaceId: string, direction?: Message["direction"]) {
-  const store = await readStore()
-  return store.messages
-    .filter((message) => message.workspaceId === workspaceId)
-    .filter((message) => (direction ? message.direction === direction : true))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+// ── Drafts ─────────────────────────────────────────────────
+
+export async function upsertDraft(
+  workspaceId: string,
+  draft: Pick<Draft, "subject" | "to" | "cc" | "bcc" | "text"> & { id?: string; threadId?: string }
+) {
+  if (draft.id) {
+    const { data: existing } = await supabase
+      .from("drafts")
+      .select("*")
+      .eq("id", draft.id)
+      .eq("workspace_id", workspaceId)
+      .single()
+
+    if (existing) {
+      await supabase
+        .from("drafts")
+        .update({
+          subject: draft.subject,
+          to: draft.to,
+          cc: draft.cc,
+          bcc: draft.bcc,
+          text: draft.text,
+          thread_id: draft.threadId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", draft.id)
+
+      return mapDraft({ ...existing, subject: draft.subject, to: draft.to, cc: draft.cc, bcc: draft.bcc, text: draft.text, thread_id: draft.threadId, updated_at: new Date().toISOString() })
+    }
+  }
+
+  const item: Draft = {
+    id: createToken("draft"),
+    workspaceId,
+    threadId: draft.threadId,
+    subject: draft.subject,
+    to: draft.to,
+    cc: draft.cc,
+    bcc: draft.bcc,
+    text: draft.text,
+    updatedAt: new Date().toISOString(),
+  }
+
+  await supabase.from("drafts").insert({
+    id: item.id,
+    workspace_id: item.workspaceId,
+    thread_id: item.threadId,
+    subject: item.subject,
+    to: item.to,
+    cc: item.cc,
+    bcc: item.bcc,
+    text: item.text,
+    updated_at: item.updatedAt,
+  })
+
+  return item
 }
 
-export async function listThreads(workspaceId: string) {
-  const store = await readStore()
-  return store.threads
-    .filter((thread) => thread.workspaceId === workspaceId)
-    .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt))
+export async function deleteDraft(draftId: string) {
+  await supabase.from("drafts").delete().eq("id", draftId)
 }
 
 export async function listDrafts(workspaceId: string) {
-  const store = await readStore()
-  return store.drafts
-    .filter((draft) => draft.workspaceId === workspaceId)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  const { data } = await supabase
+    .from("drafts")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("updated_at", { ascending: false })
+
+  return (data || []).map(mapDraft)
 }
 
-export async function getThreadWithMessages(workspaceId: string, threadId: string) {
-  const store = await readStore()
-  const thread = store.threads.find(
-    (item) => item.workspaceId === workspaceId && item.id === threadId
-  )
-  if (!thread) {
-    return null
-  }
-
-  const messages = store.messages
-    .filter((message) => message.workspaceId === workspaceId && message.threadId === threadId)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-
-  return { thread, messages }
-}
+// ── Stats ──────────────────────────────────────────────────
 
 export async function getStats(workspaceId: string) {
-  const store = await readStore()
-  const messages = store.messages.filter((message) => message.workspaceId === workspaceId)
-  const events = store.events.filter((event) => event.workspaceId === workspaceId)
+  const { data: messages } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("workspace_id", workspaceId)
 
-  const countBy = (predicate: (message: Message) => boolean) => messages.filter(predicate).length
+  const { data: events } = await supabase
+    .from("message_events")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("created_at", { ascending: false })
+    .limit(8)
+
+  const allMessages = (messages || []).map(mapMessage)
+  const allEvents = (events || []).map(mapEvent)
+
+  const countBy = (predicate: (m: Message) => boolean) => allMessages.filter(predicate).length
 
   return {
-    messages: messages.length,
-    sent: countBy((message) => message.direction === "outbound"),
-    inbox: countBy((message) => message.direction === "inbound"),
-    drafts: store.drafts.filter((draft) => draft.workspaceId === workspaceId).length,
-    failed: messages.filter((message) => message.status === "failed").length,
-    delivered: events.filter((event) => event.type === "delivered").length,
-    opened: events.filter((event) => event.type === "opened").length,
-    clicked: events.filter((event) => event.type === "clicked").length,
-    replied: messages.filter((message) => message.inReplyTo).length,
-    recentEvents: events.slice(0, 8),
+    messages: allMessages.length,
+    sent: countBy((m) => m.direction === "outbound"),
+    inbox: countBy((m) => m.direction === "inbound"),
+    drafts: (await listDrafts(workspaceId)).length,
+    failed: allMessages.filter((m) => m.status === "failed").length,
+    delivered: allEvents.filter((e) => e.type === "delivered").length,
+    opened: allEvents.filter((e) => e.type === "opened").length,
+    clicked: allEvents.filter((e) => e.type === "clicked").length,
+    replied: allMessages.filter((m) => m.inReplyTo).length,
+    recentEvents: allEvents,
+  }
+}
+
+// ── Mappers (snake_case → camelCase) ──────────────────────
+
+function mapUser(row: any): User {
+  return {
+    id: row.id,
+    email: row.email,
+    passwordHash: row.password_hash,
+    createdAt: row.created_at,
+  }
+}
+
+function mapWorkspace(row: any): Workspace {
+  return {
+    id: row.id,
+    name: row.name,
+    ownerUserId: row.owner_user_id,
+    createdAt: row.created_at,
+  }
+}
+
+function mapSession(row: any): Session {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
+  }
+}
+
+function mapSettings(row: any): ResendSettings {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    tokenEncrypted: row.token_encrypted,
+    fromName: row.from_name,
+    fromEmail: row.from_email,
+    inboundEmail: row.inbound_email,
+    updatedAt: row.updated_at,
+  }
+}
+
+function mapThread(row: any): Thread {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    subject: row.subject,
+    participants: row.participants || [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastMessageAt: row.last_message_at,
+  }
+}
+
+function mapMessage(row: any): Message {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    threadId: row.thread_id,
+    direction: row.direction,
+    status: row.status,
+    subject: row.subject,
+    fromName: row.from_name,
+    fromEmail: row.from_email,
+    to: row.to || [],
+    cc: row.cc || [],
+    bcc: row.bcc || [],
+    text: row.text,
+    html: row.html,
+    providerId: row.provider_id,
+    inReplyTo: row.in_reply_to,
+    references: row.references_list || [],
+    sentAt: row.sent_at,
+    receivedAt: row.received_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+function mapEvent(row: any): MessageEvent {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    messageId: row.message_id,
+    type: row.type,
+    payload: row.payload || {},
+    createdAt: row.created_at,
+  }
+}
+
+function mapDraft(row: any): Draft {
+  return {
+    id: row.id,
+    workspaceId: row.workspace_id,
+    threadId: row.thread_id,
+    subject: row.subject,
+    to: row.to,
+    cc: row.cc,
+    bcc: row.bcc,
+    text: row.text,
+    updatedAt: row.updated_at,
   }
 }

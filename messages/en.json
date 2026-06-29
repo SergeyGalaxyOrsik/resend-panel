@@ -11,6 +11,16 @@
     "noSubject": "No subject",
     "noRecipients": "No recipients"
   },
+  "mail": {
+    "sortNewest": "Newest first",
+    "sortOldest": "Oldest first",
+    "sentAt": "Sent",
+    "receivedAt": "Received",
+    "lastActivity": "Last activity",
+    "noMessages": "No messages.",
+    "searchPlaceholder": "Search by subject or email",
+    "noSearchResults": "No messages match your search."
+  },
   "nav": {
     "mail": "Mail",
     "dashboard": "Dashboard",
@@ -176,6 +186,6 @@
     "addRecipient": "Add at least one recipient.",
     "messageSent": "Message sent.",
     "settingsSaved": "Settings saved for {email}.",
-    "syncCompleted": "Imported {imported} messages from Resend ({sent} sent, {received} received)."
+    "syncCompleted": "Imported {imported} new and updated {backfilled} existing messages from Resend ({sent} sent, {received} received in account)."
   }
 }

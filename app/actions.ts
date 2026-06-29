@@ -182,6 +182,7 @@ export async function syncResendHistoryAction(_prev: AuthState): Promise<AuthSta
     return {
       success: t("syncCompleted", {
         imported: result.imported,
+        backfilled: result.backfilled,
         sent: result.sent,
         received: result.received,
       }),
@@ -399,10 +400,12 @@ export async function inboundWebhookAction(requestBody: unknown) {
     return { duplicate: true }
   }
 
+  const receivedAt = new Date().toISOString()
   const thread = await ensureThread(
     workspace.id,
     payload.subject,
-    Array.from(new Set([payload.from, ...payload.to]))
+    Array.from(new Set([payload.from, ...payload.to])),
+    { messageAt: receivedAt }
   )
 
   const message = await createMessage({
@@ -418,7 +421,7 @@ export async function inboundWebhookAction(requestBody: unknown) {
     bcc: [],
     text: payload.text || payload.html,
     html: payload.html || buildHtmlFromText(payload.text || payload.subject),
-    receivedAt: new Date().toISOString(),
+    receivedAt,
     inReplyTo: payload.inReplyTo || undefined,
     references: payload.references,
   })

@@ -11,6 +11,16 @@
     "noSubject": "Без темы",
     "noRecipients": "Нет получателей"
   },
+  "mail": {
+    "sortNewest": "Сначала новые",
+    "sortOldest": "Сначала старые",
+    "sentAt": "Отправлено",
+    "receivedAt": "Получено",
+    "lastActivity": "Последняя активность",
+    "noMessages": "Нет сообщений.",
+    "searchPlaceholder": "Поиск по теме или email",
+    "noSearchResults": "Ничего не найдено."
+  },
   "nav": {
     "mail": "Почта",
     "dashboard": "Панель",
@@ -176,6 +186,6 @@
     "addRecipient": "Добавьте хотя бы одного получателя.",
     "messageSent": "Сообщение отправлено.",
     "settingsSaved": "Настройки сохранены для {email}.",
-    "syncCompleted": "Импортировано {imported} сообщений из Resend ({sent} отправленных, {received} входящих)."
+    "syncCompleted": "Импортировано {imported} новых и обновлено {backfilled} существующих сообщений из Resend ({sent} отправленных, {received} входящих в аккаунте)."
   }
 }

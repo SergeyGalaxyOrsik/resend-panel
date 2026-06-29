@@ -11,6 +11,16 @@
     "noSubject": "无主题",
     "noRecipients": "无收件人"
   },
+  "mail": {
+    "sortNewest": "最新优先",
+    "sortOldest": "最早优先",
+    "sentAt": "发送时间",
+    "receivedAt": "接收时间",
+    "lastActivity": "最近活动",
+    "noMessages": "暂无消息。",
+    "searchPlaceholder": "按主题或邮箱搜索",
+    "noSearchResults": "未找到匹配的消息。"
+  },
   "nav": {
     "mail": "邮件",
     "dashboard": "仪表盘",
@@ -176,6 +186,6 @@
     "addRecipient": "请至少添加一位收件人。",
     "messageSent": "消息已发送。",
     "settingsSaved": "已为 {email} 保存设置。",
-    "syncCompleted": "从 Resend 导入了 {imported} 条消息（{sent} 条已发送，{received} 条入站）。"
+    "syncCompleted": "从 Resend 新导入 {imported} 条并更新 {backfilled} 条已有消息（账户中共 {sent} 条已发送，{received} 条入站）。"
   }
 }

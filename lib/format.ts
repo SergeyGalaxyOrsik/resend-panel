@@ -1,10 +1,31 @@
-import { getLocale } from "next-intl/server"
+import type { Message } from "@/lib/types"
 
 export function formatDate(value: string, locale?: string) {
   return new Intl.DateTimeFormat(locale ?? "en", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value))
+}
+
+export function getMessageTimestamp(message: Pick<Message, "direction" | "sentAt" | "receivedAt" | "createdAt">) {
+  if (message.direction === "outbound") {
+    return message.sentAt ?? message.createdAt
+  }
+
+  return message.receivedAt ?? message.createdAt
+}
+
+export function formatMessageDate(message: Pick<Message, "direction" | "sentAt" | "receivedAt" | "createdAt">, locale?: string) {
+  return formatDate(getMessageTimestamp(message), locale)
+}
+
+export function compareMessageTimestamps(
+  a: Pick<Message, "direction" | "sentAt" | "receivedAt" | "createdAt">,
+  b: Pick<Message, "direction" | "sentAt" | "receivedAt" | "createdAt">,
+  order: "asc" | "desc" = "desc"
+) {
+  const diff = new Date(getMessageTimestamp(a)).getTime() - new Date(getMessageTimestamp(b)).getTime()
+  return order === "asc" ? diff : -diff
 }
 
 export function formatRelative(value: string, locale?: string) {
@@ -38,5 +59,6 @@ function formatRelativeUnit(unit: "minutes" | "hours" | "days", count: number, l
 }
 
 export async function getFormatLocale() {
+  const { getLocale } = await import("next-intl/server")
   return getLocale()
 }

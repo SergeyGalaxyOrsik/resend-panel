@@ -68,6 +68,24 @@ bun run dev
 2. Configure inbound webhook → `https://your-domain/api/inbound`
 3. Configure event webhook → `https://your-domain/api/events`
 
+## Docker
+
+Build and run locally:
+
+```bash
+docker build -t resend-panel .
+docker run --rm -p 3000:3000 \
+  -e SUPABASE_URL=https://your-project.supabase.co \
+  -e SUPABASE_SECRET_KEY=your-secret-key \
+  -e APP_SECRET=$(openssl rand -hex 32) \
+  -e RESEND_WEBHOOK_SECRET=your-webhook-secret \
+  resend-panel
+```
+
+Open [http://localhost:3000](http://localhost:3000).
+
+For production, point Resend webhooks at your public host, e.g. `https://your-domain/api/inbound` and `https://your-domain/api/events`.
+
 ## Project Structure
 
 ```

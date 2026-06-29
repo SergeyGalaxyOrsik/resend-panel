@@ -1,4 +1,4 @@
-import { getLocale, getTranslations } from "next-intl/server"
+import { getTranslations } from "next-intl/server"
 import { requireCurrentUser } from "@/lib/auth"
 import { getCurrentWorkspace, listMessages } from "@/lib/store"
 import { MessageList } from "@/components/message-list"
@@ -11,11 +11,10 @@ export default async function SentPage() {
 
   const t = await getTranslations("sent")
   const tn = await getTranslations("nav")
-  const locale = await getLocale()
   const messages = await listMessages(workspace.id, "outbound")
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <div>
         <h2 className="text-lg font-semibold">{t("title")}</h2>
         <p className="text-sm text-muted-foreground">{t("messageCount", { count: messages.length })}</p>
@@ -29,7 +28,7 @@ export default async function SentPage() {
           href="/compose"
         />
       ) : (
-        <MessageList messages={messages} variant="sent" emptyLabel={t("noMessages")} locale={locale} />
+        <MessageList messages={messages} variant="sent" emptyLabel={t("noMessages")} />
       )}
     </div>
   )

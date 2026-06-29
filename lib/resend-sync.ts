@@ -7,6 +7,8 @@ import {
   getCurrentSettings,
   getCurrentWorkspace,
   recordInboundReceipt,
+  refreshAllThreadLastMessageAt,
+  updateMessage,
 } from "@/lib/store"
 import type { MessageStatus } from "@/lib/types"
 
@@ -15,7 +17,9 @@ type ResendListResponse<T> = {
   has_more: boolean
 }
 
-type ResendSentItem = {
+type ResendRecord = Record<string, unknown>
+
+type ResendSentItem = ResendRecord & {
   id: string
   subject?: string
   from?: string
@@ -23,11 +27,12 @@ type ResendSentItem = {
   cc?: string[] | null
   bcc?: string[] | null
   created_at?: string
+  createdAt?: string
   last_event?: string
   message_id?: string
 }
 
-type ResendReceivedItem = {
+type ResendReceivedItem = ResendRecord & {
   id: string
   subject?: string
   from?: string
@@ -35,18 +40,44 @@ type ResendReceivedItem = {
   cc?: string[]
   bcc?: string[]
   created_at?: string
+  createdAt?: string
+  received_at?: string
+  receivedAt?: string
   message_id?: string
 }
 
-type ResendEmailDetail = {
-  id: string
-  subject?: string
-  from?: string
-  to?: string[]
-  html?: string | null
-  text?: string | null
-  created_at?: string
-  last_event?: string
+function unwrapResendRecord<T extends ResendRecord>(payload: unknown): T | null {
+  if (!payload || typeof payload !== "object") return null
+
+  const record = payload as ResendRecord
+  if (record.data && typeof record.data === "object" && !Array.isArray(record.data)) {
+    return record.data as T
+  }
+
+  return record as T
+}
+
+function readResendTimestamp(
+  item: ResendRecord,
+  detail: ResendRecord | null | undefined,
+  direction: "outbound" | "inbound"
+) {
+  const keys =
+    direction === "outbound"
+      ? ["sent_at", "sentAt", "created_at", "createdAt"]
+      : ["received_at", "receivedAt", "created_at", "createdAt"]
+
+  for (const source of [detail, item]) {
+    if (!source) continue
+    for (const key of keys) {
+      const value = source[key]
+      if (typeof value === "string" && !Number.isNaN(Date.parse(value))) {
+        return value
+      }
+    }
+  }
+
+  return null
 }
 
 function parseAddress(value: string | undefined) {
@@ -108,7 +139,7 @@ async function fetchSentDetail(token: string, id: string) {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!response.ok) return null
-  return (await response.json()) as ResendEmailDetail
+  return unwrapResendRecord<ResendRecord>(await response.json())
 }
 
 async function fetchReceivedDetail(token: string, id: string) {
@@ -116,7 +147,26 @@ async function fetchReceivedDetail(token: string, id: string) {
     headers: { Authorization: `Bearer ${token}` },
   })
   if (!response.ok) return null
-  return (await response.json()) as ResendEmailDetail & { html?: string; text?: string }
+  return unwrapResendRecord<ResendRecord>(await response.json())
+}
+
+async function backfillMessageTimestamps(
+  messageId: string,
+  direction: "outbound" | "inbound",
+  occurredAt: string
+) {
+  if (direction === "outbound") {
+    await updateMessage(messageId, {
+      sentAt: occurredAt,
+      createdAt: occurredAt,
+    })
+    return
+  }
+
+  await updateMessage(messageId, {
+    receivedAt: occurredAt,
+    createdAt: occurredAt,
+  })
 }
 
 export async function syncResendHistory(token: string) {
@@ -132,26 +182,34 @@ export async function syncResendHistory(token: string) {
   ])
 
   let imported = 0
+  let backfilled = 0
 
   for (const item of sentItems) {
-    if (!item.id || (await findMessageByProviderId(item.id))) {
+    if (!item.id) continue
+
+    const detail = await fetchSentDetail(token, item.id)
+    const occurredAt = readResendTimestamp(item, detail, "outbound")
+    if (!occurredAt) continue
+
+    const existing = await findMessageByProviderId(item.id)
+    if (existing) {
+      await backfillMessageTimestamps(existing.id, "outbound", occurredAt)
+      backfilled += 1
       continue
     }
 
-    const detail = await fetchSentDetail(token, item.id)
-    const from = parseAddress(item.from ?? detail?.from)
-    const to = (item.to ?? detail?.to ?? []).map(String)
-    const subject = item.subject ?? detail?.subject ?? "No subject"
-    const text = detail?.text ?? subject
-    const html = detail?.html ?? buildHtmlFromText(text)
-    const createdAt = item.created_at ?? detail?.created_at ?? new Date().toISOString()
+    const from = parseAddress(String(item.from ?? detail?.from ?? ""))
+    const to = (item.to ?? (detail?.to as string[] | undefined) ?? []).map(String)
+    const subject = String(item.subject ?? detail?.subject ?? "No subject")
+    const text = String(detail?.text ?? subject)
+    const html = String(detail?.html ?? buildHtmlFromText(text))
 
-    const thread = await ensureThread(workspace.id, subject, [from.email, ...to])
+    const thread = await ensureThread(workspace.id, subject, [from.email, ...to], { messageAt: occurredAt })
     const message = await createMessage({
       workspaceId: workspace.id,
       threadId: thread.id,
       direction: "outbound",
-      status: mapLastEvent(item.last_event ?? detail?.last_event),
+      status: mapLastEvent(String(item.last_event ?? detail?.last_event ?? "")),
       subject,
       fromName: from.name,
       fromEmail: from.email,
@@ -161,9 +219,9 @@ export async function syncResendHistory(token: string) {
       text,
       html,
       providerId: item.id,
-      sentAt: createdAt,
-      createdAt,
-      updatedAt: createdAt,
+      sentAt: occurredAt,
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
     })
 
     await createEvent(workspace.id, message.id, "sent", { providerId: item.id, source: "resend-sync" })
@@ -175,19 +233,26 @@ export async function syncResendHistory(token: string) {
   }
 
   for (const item of receivedItems) {
-    if (!item.id || (await findMessageByProviderId(item.id))) {
+    if (!item.id) continue
+
+    const detail = await fetchReceivedDetail(token, item.id)
+    const occurredAt = readResendTimestamp(item, detail, "inbound")
+    if (!occurredAt) continue
+
+    const existing = await findMessageByProviderId(item.id)
+    if (existing) {
+      await backfillMessageTimestamps(existing.id, "inbound", occurredAt)
+      backfilled += 1
       continue
     }
 
-    const detail = await fetchReceivedDetail(token, item.id)
-    const from = parseAddress(item.from ?? detail?.from)
-    const to = (item.to ?? detail?.to ?? [settings?.inboundEmail].filter(Boolean)).map(String)
-    const subject = item.subject ?? detail?.subject ?? "No subject"
-    const text = detail?.text ?? subject
-    const html = detail?.html ?? buildHtmlFromText(text)
-    const createdAt = item.created_at ?? detail?.created_at ?? new Date().toISOString()
+    const from = parseAddress(String(item.from ?? detail?.from ?? ""))
+    const to = (item.to ?? (detail?.to as string[] | undefined) ?? [settings?.inboundEmail].filter(Boolean)).map(String)
+    const subject = String(item.subject ?? detail?.subject ?? "No subject")
+    const text = String(detail?.text ?? subject)
+    const html = String(detail?.html ?? buildHtmlFromText(text))
 
-    const thread = await ensureThread(workspace.id, subject, [from.email, ...to])
+    const thread = await ensureThread(workspace.id, subject, [from.email, ...to], { messageAt: occurredAt })
     const message = await createMessage({
       workspaceId: workspace.id,
       threadId: thread.id,
@@ -202,12 +267,12 @@ export async function syncResendHistory(token: string) {
       text,
       html,
       providerId: item.id,
-      receivedAt: createdAt,
-      createdAt,
-      updatedAt: createdAt,
+      receivedAt: occurredAt,
+      createdAt: occurredAt,
+      updatedAt: occurredAt,
     })
 
-    const externalId = item.message_id || item.id
+    const externalId = String(item.message_id || item.id)
     if (externalId) {
       await recordInboundReceipt(externalId, message.id)
     }
@@ -216,8 +281,11 @@ export async function syncResendHistory(token: string) {
     imported += 1
   }
 
+  await refreshAllThreadLastMessageAt(workspace.id)
+
   return {
     imported,
+    backfilled,
     sent: sentItems.length,
     received: receivedItems.length,
   }

@@ -159,9 +159,15 @@ export async function updateResendSettings(
 
 // ── Threads ────────────────────────────────────────────────
 
-export async function ensureThread(workspaceId: string, subject: string, participants: string[]) {
+export async function ensureThread(
+  workspaceId: string,
+  subject: string,
+  participants: string[],
+  options?: { messageAt?: string }
+) {
   const normalizedSubject = subject.trim() || "No subject"
   const uniqueParticipants = Array.from(new Set(participants))
+  const messageAt = options?.messageAt
 
   const { data: existingList } = await supabase
     .from("threads")
@@ -174,13 +180,16 @@ export async function ensureThread(workspaceId: string, subject: string, partici
 
   if (existing) {
     const mergedParticipants = Array.from(new Set([...(existing.participants || []), ...uniqueParticipants]))
+    const existingLast = existing.last_message_at as string
+    const lastMessageAt =
+      messageAt && new Date(messageAt).getTime() > new Date(existingLast).getTime() ? messageAt : existingLast
     const now = new Date().toISOString()
     await supabase
       .from("threads")
       .update({
         participants: mergedParticipants,
         updated_at: now,
-        last_message_at: now,
+        last_message_at: lastMessageAt,
       })
       .eq("id", existing.id)
 
@@ -188,18 +197,19 @@ export async function ensureThread(workspaceId: string, subject: string, partici
       ...existing,
       participants: mergedParticipants,
       updated_at: now,
-      last_message_at: now,
+      last_message_at: lastMessageAt,
     })
   }
 
+  const initialAt = messageAt ?? new Date().toISOString()
   const thread: Thread = {
     id: createToken("thread"),
     workspaceId,
     subject: normalizedSubject,
     participants: uniqueParticipants,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    lastMessageAt: new Date().toISOString(),
+    createdAt: initialAt,
+    updatedAt: initialAt,
+    lastMessageAt: initialAt,
   }
 
   const { error } = await supabase.from("threads").insert({
@@ -226,6 +236,43 @@ export async function listThreads(workspaceId: string) {
   return (data || []).map(mapThread)
 }
 
+export async function refreshAllThreadLastMessageAt(workspaceId: string) {
+  const { data: threads } = await supabase.from("threads").select("id").eq("workspace_id", workspaceId)
+  if (!threads?.length) return
+
+  for (const thread of threads) {
+    await refreshThreadLastMessageAt(workspaceId, thread.id as string)
+  }
+}
+
+export async function refreshThreadLastMessageAt(workspaceId: string, threadId: string) {
+  const { data: messages } = await supabase
+    .from("messages")
+    .select("sent_at, received_at, created_at, direction")
+    .eq("workspace_id", workspaceId)
+    .eq("thread_id", threadId)
+
+  if (!messages?.length) return
+
+  let latest = messages[0].created_at as string
+  let latestTime = 0
+
+  for (const row of messages) {
+    const direction = row.direction as Message["direction"]
+    const candidate =
+      direction === "outbound"
+        ? ((row.sent_at as string | null) ?? (row.created_at as string))
+        : ((row.received_at as string | null) ?? (row.created_at as string))
+    const time = new Date(candidate).getTime()
+    if (time > latestTime) {
+      latestTime = time
+      latest = candidate
+    }
+  }
+
+  await supabase.from("threads").update({ last_message_at: latest }).eq("id", threadId)
+}
+
 export async function getThreadWithMessages(workspaceId: string, threadId: string) {
   const { data: threadData } = await supabase
     .from("threads")
@@ -243,9 +290,11 @@ export async function getThreadWithMessages(workspaceId: string, threadId: strin
     .eq("thread_id", threadId)
     .order("created_at", { ascending: true })
 
+  const messages = (messagesData || []).map(mapMessage)
+
   return {
     thread: mapThread(threadData),
-    messages: (messagesData || []).map(mapMessage),
+    messages: messages.sort((a, b) => compareMessagesByTimestamp(a, b, "asc")),
   }
 }
 
@@ -299,6 +348,8 @@ export async function updateMessage(messageId: string, updater: Partial<Message>
   if (updater.status !== undefined) updates.status = updater.status
   if (updater.providerId !== undefined) updates.provider_id = updater.providerId
   if (updater.sentAt !== undefined) updates.sent_at = updater.sentAt
+  if (updater.receivedAt !== undefined) updates.received_at = updater.receivedAt
+  if (updater.createdAt !== undefined) updates.created_at = updater.createdAt
   if (updater.html !== undefined) updates.html = updater.html
   if (updater.text !== undefined) updates.text = updater.text
   if (updater.threadId !== undefined) updates.thread_id = updater.threadId
@@ -327,7 +378,16 @@ export async function listMessages(workspaceId: string, direction?: Message["dir
   }
 
   const { data } = await query
-  return (data || []).map(mapMessage)
+  const messages = (data || []).map(mapMessage)
+
+  return messages.sort((a, b) => compareMessagesByTimestamp(a, b, "desc"))
+}
+
+function compareMessagesByTimestamp(a: Message, b: Message, order: "asc" | "desc") {
+  const aTime = new Date(a.direction === "outbound" ? a.sentAt ?? a.createdAt : a.receivedAt ?? a.createdAt).getTime()
+  const bTime = new Date(b.direction === "outbound" ? b.sentAt ?? b.createdAt : b.receivedAt ?? b.createdAt).getTime()
+  const diff = aTime - bTime
+  return order === "asc" ? diff : -diff
 }
 
 // ── Events ─────────────────────────────────────────────────

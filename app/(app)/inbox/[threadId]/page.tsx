@@ -16,5 +16,5 @@ export default async function ThreadPage({ params }: Props) {
   const result = await getThreadWithMessages(workspace.id, threadId)
   if (!result) notFound()
 
-  return <ThreadView thread={result.thread} messages={result.messages} />
+  return <div className="min-w-0"><ThreadView thread={result.thread} messages={result.messages} /></div>
 }

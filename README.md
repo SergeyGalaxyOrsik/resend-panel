@@ -1,36 +1,93 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Resend Panel
+
+Self-hosted email management panel powered by [Resend](https://resend.com). Single-tenant workspace with auth, inbox, compose, reply, drafts, and delivery statistics.
+
+## Features
+
+- **Auth bootstrap** — first user becomes workspace owner, registration closes automatically
+- **Inbox & threads** — receive inbound emails via Resend webhook, threaded conversation view
+- **Compose & reply** — send emails through Resend API, reply within threads
+- **Drafts** — save and resume drafts
+- **Delivery stats** — sent, delivered, opened, clicked, failed metrics
+- **Settings** — encrypted Resend API token storage, sender identity config
+
+## Tech Stack
+
+- [Next.js 16](https://nextjs.org) (App Router, React 19)
+- [shadcn/ui](https://ui.shadcn.com) (radix-nova) + Tailwind CSS 4
+- File-based JSON store (no external database required)
+- AES-256-GCM encryption for secrets
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- [Node.js](https://nodejs.org) 18+ or [Bun](https://bun.sh)
+- A [Resend](https://resend.com) account and API token
+
+### Installation
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/SergeyGalaxyOrsik/resend-panel.git
+cd resend-panel
+cp .env.example .env
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Generate an encryption key:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# macOS/Linux
+echo "APP_SECRET=$(openssl rand -hex 32)" >> .env
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Install dependencies and start the dev server:
 
-## Learn More
+```bash
+bun install
+bun run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Open [http://localhost:3000](http://localhost:3000). The first account you create becomes the workspace owner.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Configuration
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `APP_SECRET` | Yes | Encryption key for API tokens. Generate with `openssl rand -hex 32` |
+| `NODE_ENV` | No | Set to `production` in deployed environments |
 
-## Deploy on Vercel
+### Resend Setup
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Create a [Resend](https://resend.com) account
+2. Go to **Settings** in the panel and paste your API token
+3. Configure inbound email in your Resend dashboard pointing to `/api/inbound`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Project Structure
+
+```
+app/
+├── (auth)/              # Login, register (public)
+│   ├── login/
+│   ├── register/
+│   └── layout.tsx
+├── (app)/               # Protected routes (sidebar shell)
+│   ├── dashboard/
+│   ├── inbox/
+│   │   └── [threadId]/
+│   ├── sent/
+│   ├── compose/
+│   ├── drafts/
+│   │   └── [draftId]/edit/
+│   ├── statistics/
+│   ├── settings/
+│   └── layout.tsx
+├── api/inbound/         # Resend webhook endpoint
+├── actions.ts           # Server actions
+└── layout.tsx           # Root layout
+components/              # UI components
+lib/                     # Auth, store, crypto, email utils
+```
+
+## License
+
+[MIT](LICENSE)

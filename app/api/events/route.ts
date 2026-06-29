@@ -1,13 +1,23 @@
 import { NextResponse } from "next/server"
 import { resendEventWebhookAction } from "@/app/actions"
-import { verifyResendWebhook } from "@/lib/webhooks"
+import { getResendWebhookSecret, verifyResendWebhook } from "@/lib/webhooks"
 
 export async function POST(request: Request) {
   try {
     const rawBody = await request.text()
     const signature = request.headers.get("svix-signature") || request.headers.get("resend-signature")
 
-    if (!verifyResendWebhook(rawBody, signature, process.env.RESEND_WEBHOOK_SECRET)) {
+    if (
+      !verifyResendWebhook(
+        rawBody,
+        {
+          signature,
+          id: request.headers.get("svix-id"),
+          timestamp: request.headers.get("svix-timestamp"),
+        },
+        getResendWebhookSecret("events")
+      )
+    ) {
       return NextResponse.json({ error: "Invalid webhook signature." }, { status: 401 })
     }
 

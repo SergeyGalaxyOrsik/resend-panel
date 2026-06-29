@@ -41,7 +41,9 @@ Configure `.env`:
 | `SUPABASE_URL` | Yes | Hosted Supabase project URL |
 | `SUPABASE_SECRET_KEY` | Yes | Server-only secret key (`SUPABASE_SERVICE_KEY` also supported) |
 | `APP_SECRET` | Yes | Encryption key. Generate with `openssl rand -hex 32` |
-| `RESEND_WEBHOOK_SECRET` | Prod | Webhook signature verification |
+| `RESEND_INBOUND_WEBHOOK_SECRET` | Prod | Signing secret for webhook → `/api/inbound` (`email.received`) |
+| `RESEND_EVENTS_WEBHOOK_SECRET` | Prod | Signing secret for webhook → `/api/events` (delivered, opened, …) |
+| `RESEND_WEBHOOK_SECRET` | Optional | Legacy fallback if both webhooks share one secret |
 
 Apply schema (via Supabase dashboard SQL or MCP):
 
@@ -65,8 +67,8 @@ bun run dev
 ### Resend Setup
 
 1. Paste API token in **Settings**
-2. Configure inbound webhook → `https://your-domain/api/inbound`
-3. Configure event webhook → `https://your-domain/api/events`
+2. Webhook **`email.received`** → `https://your-domain/api/inbound` — copy its signing secret to `RESEND_INBOUND_WEBHOOK_SECRET`
+3. Webhook **delivery events** (delivered, opened, clicked, bounced, failed) → `https://your-domain/api/events` — copy its signing secret to `RESEND_EVENTS_WEBHOOK_SECRET`
 
 ## Docker
 
@@ -78,7 +80,8 @@ docker run --rm -p 3000:3000 \
   -e SUPABASE_URL=https://your-project.supabase.co \
   -e SUPABASE_SECRET_KEY=your-secret-key \
   -e APP_SECRET=$(openssl rand -hex 32) \
-  -e RESEND_WEBHOOK_SECRET=your-webhook-secret \
+  -e RESEND_INBOUND_WEBHOOK_SECRET=whsec_inbound_secret \
+  -e RESEND_EVENTS_WEBHOOK_SECRET=whsec_events_secret \
   resend-panel
 ```
 

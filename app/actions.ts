@@ -8,6 +8,7 @@ import {
   buildHtmlFromText,
   buildTextPreview,
   extractInboundPayload,
+  fetchResendEmail,
   getReplyRecipients,
   getResendToken,
   normalizeRecipients,
@@ -438,6 +439,21 @@ export async function inboundWebhookAction(requestBody: unknown) {
     { messageAt: receivedAt }
   )
 
+  // Fetch email content from Resend API if html/text are missing (webhook doesn't include body)
+  let html = payload.html
+  let text = payload.text
+  if ((!html || !text) && payload.emailId) {
+    const settings = await getCurrentSettings()
+    const token = getResendToken(settings?.tokenEncrypted)
+    if (token) {
+      const emailData = await fetchResendEmail(payload.emailId, token)
+      if (emailData) {
+        html = html || emailData.html
+        text = text || emailData.text
+      }
+    }
+  }
+
   const message = await createMessage({
     workspaceId: workspace.id,
     threadId: thread.id,
@@ -449,8 +465,8 @@ export async function inboundWebhookAction(requestBody: unknown) {
     to: payload.to,
     cc: [],
     bcc: [],
-    text: payload.text || payload.html,
-    html: payload.html || buildHtmlFromText(payload.text || payload.subject),
+    text: text || payload.subject,
+    html: html || buildHtmlFromText(text || payload.subject),
     receivedAt,
     inReplyTo: payload.inReplyTo || undefined,
     references: payload.references,

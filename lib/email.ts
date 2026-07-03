@@ -117,7 +117,13 @@ export function extractInboundPayload(payload: unknown) {
           ? String(record.references).split(/\s+/).filter(Boolean)
           : []
 
-  return { subject, from, to, text, html, messageId, inReplyTo, references }
+  const emailId = pickFirstNonEmptyString(body, record, [
+    "email_id",
+    "emailId",
+    "id",
+  ])
+
+  return { subject, from, to, text, html, messageId, inReplyTo, references, emailId }
 }
 
 function pickFirstNonEmptyString(
@@ -134,5 +140,26 @@ function pickFirstNonEmptyString(
     }
   }
   return ""
+}
+
+export async function fetchResendEmail(
+  emailId: string,
+  token: string
+): Promise<{ html: string; text: string } | null> {
+  try {
+    const response = await fetch(`https://api.resend.com/emails/${emailId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+
+    if (!response.ok) return null
+
+    const data = (await response.json()) as Record<string, unknown>
+    return {
+      html: String(data.html ?? ""),
+      text: String(data.text ?? ""),
+    }
+  } catch {
+    return null
+  }
 }
 

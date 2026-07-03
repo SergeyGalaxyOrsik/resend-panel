@@ -122,3 +122,14 @@ export type AuthState = {
   success?: string
 }
 
+export type Attachment = {
+  id: ID
+  messageId: ID
+  workspaceId: ID
+  filename: string
+  contentType: string
+  size: number
+  storagePath: string
+  createdAt: Timestamp
+}
+

@@ -206,6 +206,7 @@ async function sendMessage(
     threadId?: string
     replyToMessageId?: string
     references?: string[]
+    attachmentIds?: string[]
   }
 ) {
   const t = await getTranslations("errors")
@@ -232,6 +233,32 @@ async function sendMessage(
     references: payload.references || (payload.replyToMessageId ? [payload.replyToMessageId] : []),
   })
 
+  if (payload.attachmentIds?.length) {
+    const { supabase } = await import("@/lib/supabase")
+    for (const attId of payload.attachmentIds) {
+      await supabase
+        .from("attachments")
+        .update({ message_id: message.id })
+        .eq("id", attId)
+    }
+  }
+
+  const attachments: Array<{ filename: string; content: string }> = []
+  if (payload.attachmentIds?.length) {
+    const { listAttachments, getAttachmentBuffer } = await import("@/lib/attachments")
+    const atts = await listAttachments(message.id)
+    for (const att of atts) {
+      const buffer = await getAttachmentBuffer(att.storagePath)
+      if (buffer) {
+        const base64 = Buffer.from(buffer).toString("base64")
+        attachments.push({
+          filename: att.filename,
+          content: base64,
+        })
+      }
+    }
+  }
+
   if (!settingsToken) {
     await updateMessage(message.id, { status: "failed" })
     await createEvent(workspaceId, message.id, "failed", { reason: t("resendTokenNotConfigured") })
@@ -254,6 +281,7 @@ async function sendMessage(
         html,
         text: payload.text,
         reply_to: fromEmail,
+        attachments: attachments.length ? attachments : undefined,
         headers: payload.replyToMessageId
           ? {
               "In-Reply-To": payload.replyToMessageId,
@@ -306,6 +334,7 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
   const threadId = readField(formData, "threadId") || undefined
   const replyToMessageId = readField(formData, "replyToMessageId") || undefined
   const draftId = readField(formData, "draftId") || undefined
+  const attachmentIds = formData.getAll("attachmentIds") as string[]
 
   if (!subject && intent !== "save") {
     return { error: t("subjectRequired") }
@@ -366,6 +395,7 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
     threadId: finalThreadId,
     replyToMessageId: replyTarget,
     references,
+    attachmentIds,
   })
 
   if (result.error) {

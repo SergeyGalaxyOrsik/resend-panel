@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import type { AuthState } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { FileAttachments } from "@/components/file-attachments"
 
 type Action = (prevState: AuthState, formData: FormData) => Promise<AuthState>
 
@@ -69,6 +70,13 @@ export function EmailComposer({
 }: EmailComposerProps) {
   const [state, formAction, pending] = useActionState(action, initialState)
   const [text, setText] = useState(initialText)
+  const [attachedFiles, setAttachedFiles] = useState<Array<{
+    id: string
+    filename: string
+    contentType: string
+    size: number
+    storagePath: string
+  }>>([])
   const t = useTranslations("compose")
   const previewHtml = useMemo(() => renderPreview(text, t("previewPlaceholder")), [text, t])
 
@@ -95,6 +103,9 @@ export function EmailComposer({
             {threadId ? <input type="hidden" name="threadId" value={threadId} /> : null}
             {draftId ? <input type="hidden" name="draftId" value={draftId} /> : null}
             {replyToMessageId ? <input type="hidden" name="replyToMessageId" value={replyToMessageId} /> : null}
+            {attachedFiles.map((file) => (
+              <input key={file.id} type="hidden" name="attachmentIds" value={file.id} />
+            ))}
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2 md:col-span-2">
@@ -137,6 +148,12 @@ export function EmailComposer({
                 required
               />
             </div>
+
+            <FileAttachments
+              files={attachedFiles}
+              onFilesChange={setAttachedFiles}
+              disabled={pending}
+            />
 
             <div className="flex flex-wrap gap-3">
               <Button type="submit" name="intent" value="save" variant="outline">

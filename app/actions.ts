@@ -443,6 +443,7 @@ export async function inboundWebhookAction(requestBody: unknown) {
   let html = payload.html
   let text = payload.text
   if ((!html || !text) && payload.emailId) {
+    console.log("[inbound] html/text empty, fetching from Resend API for email_id:", payload.emailId)
     const settings = await getCurrentSettings()
     const token = getResendToken(settings?.tokenEncrypted)
     if (token) {
@@ -450,7 +451,12 @@ export async function inboundWebhookAction(requestBody: unknown) {
       if (emailData) {
         html = html || emailData.html
         text = text || emailData.text
+        console.log("[inbound] fetched from API - html:", html?.length || 0, "chars, text:", text?.length || 0, "chars")
+      } else {
+        console.log("[inbound] fetchResendEmail returned null")
       }
+    } else {
+      console.log("[inbound] no Resend token configured")
     }
   }
 

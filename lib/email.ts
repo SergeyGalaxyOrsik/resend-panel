@@ -147,9 +147,15 @@ export async function fetchResendEmail(
   token: string
 ): Promise<{ html: string; text: string } | null> {
   try {
-    const response = await fetch(`https://api.resend.com/emails/${emailId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const response = await fetch(
+      `https://api.resend.com/emails/receiving/${emailId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "User-Agent": "resend-panel/1.0",
+        },
+      }
+    )
 
     if (!response.ok) return null
 

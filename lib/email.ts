@@ -71,16 +71,68 @@ export function extractInboundPayload(payload: unknown) {
   const subject = String(body.subject ?? record.subject ?? "No subject")
   const from = String(body.from ?? record.from ?? "unknown@example.com")
   const to = Array.isArray(body.to) ? body.to.map(String) : normalizeRecipients(String(body.to ?? ""))
-  const text = String(body.text ?? body.plaintext ?? record.text ?? "")
-  const html = String(body.html ?? record.html ?? "")
-  const messageId = String(body.message_id ?? body.messageId ?? record.messageId ?? "")
-  const inReplyTo = String(body.in_reply_to ?? body.inReplyTo ?? record.inReplyTo ?? "")
+
+  const html = pickFirstNonEmptyString(body, record, [
+    "html",
+    "content",
+    "body",
+    "html_body",
+    "htmlBody",
+    "body_html",
+    "bodyHtml",
+  ])
+
+  const text = pickFirstNonEmptyString(body, record, [
+    "text",
+    "plaintext",
+    "plain_text",
+    "plainText",
+    "body_text",
+    "bodyText",
+    "text_body",
+    "textBody",
+  ])
+
+  const messageId = pickFirstNonEmptyString(body, record, [
+    "message_id",
+    "messageId",
+    "id",
+    "message_ID",
+  ])
+
+  const inReplyTo = pickFirstNonEmptyString(body, record, [
+    "in_reply_to",
+    "inReplyTo",
+    "in_reply_ID",
+    "inReplyID",
+  ])
+
   const references = Array.isArray(body.references)
     ? body.references.map(String)
     : typeof body.references === "string"
       ? body.references.split(/\s+/).filter(Boolean)
-      : []
+      : Array.isArray(record.references)
+        ? record.references.map(String)
+        : typeof record.references === "string"
+          ? String(record.references).split(/\s+/).filter(Boolean)
+          : []
 
   return { subject, from, to, text, html, messageId, inReplyTo, references }
+}
+
+function pickFirstNonEmptyString(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+  keys: string[]
+): string {
+  for (const obj of [a, b]) {
+    for (const key of keys) {
+      const val = obj[key]
+      if (typeof val === "string" && val.trim()) {
+        return val
+      }
+    }
+  }
+  return ""
 }
 

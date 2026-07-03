@@ -21,7 +21,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid webhook signature." }, { status: 401 })
     }
 
-    const body = JSON.parse(rawBody) as unknown
+    const body = JSON.parse(rawBody) as Record<string, unknown>
+    const data = (body.data ?? body.email ?? body) as Record<string, unknown>
+
+    console.log("[inbound] webhook keys:", Object.keys(body))
+    console.log("[inbound] data keys:", Object.keys(data))
+    console.log("[inbound] html field:", typeof data.html === "string" ? `${data.html.length} chars` : data.html)
+    console.log("[inbound] text field:", typeof data.text === "string" ? `${data.text.length} chars` : data.text)
+    console.log("[inbound] content field:", typeof data.content === "string" ? `${data.content.length} chars` : data.content)
+
     const result = await inboundWebhookAction(body)
     return NextResponse.json(result)
   } catch (error) {

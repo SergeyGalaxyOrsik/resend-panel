@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useLocale, useTranslations } from "next-intl"
 import { Link } from "@/i18n/navigation"
 import type { Message, Thread } from "@/lib/types"
@@ -19,7 +19,12 @@ import {
 import {
   ArchiveIcon,
   ArrowLeftIcon,
+  DownloadIcon,
+  FileIcon,
+  FileTextIcon,
+  FilmIcon,
   ForwardIcon,
+  ImageIcon,
   MoreHorizontalIcon,
   ReplyIcon,
   Trash2Icon,
@@ -60,6 +65,62 @@ function avatarColor(initials: string) {
     hash = (hash + char.charCodeAt(0)) % AVATAR_COLORS.length
   }
   return AVATAR_COLORS[hash] ?? "bg-foreground/60"
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function getFileIcon(contentType: string) {
+  if (contentType.startsWith("image/")) return ImageIcon
+  if (contentType.startsWith("video/")) return FilmIcon
+  if (contentType.includes("pdf") || contentType.includes("document")) return FileTextIcon
+  return FileIcon
+}
+
+function MessageAttachments({ messageId }: { messageId: string }) {
+  const [attachments, setAttachments] = useState<Array<{
+    id: string
+    filename: string
+    contentType: string
+    size: number
+    url: string
+  }>>([])
+
+  useEffect(() => {
+    fetch(`/api/attachments?messageId=${messageId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.attachments) setAttachments(data.attachments)
+      })
+      .catch(() => {})
+  }, [messageId])
+
+  if (!attachments.length) return null
+
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {attachments.map((att) => {
+        const Icon = getFileIcon(att.contentType)
+        return (
+          <a
+            key={att.id}
+            href={att.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2 text-sm transition-colors hover:bg-muted"
+          >
+            <Icon className="size-4 shrink-0 text-muted-foreground" />
+            <span className="truncate">{att.filename}</span>
+            <span className="text-xs text-muted-foreground">{formatFileSize(att.size)}</span>
+            <DownloadIcon className="size-3 text-muted-foreground" />
+          </a>
+        )
+      })}
+    </div>
+  )
 }
 
 export function ThreadView({ thread, messages, variant = "default" }: ThreadViewProps) {
@@ -158,6 +219,7 @@ export function ThreadView({ thread, messages, variant = "default" }: ThreadView
                     className="prose prose-sm max-w-none overflow-hidden break-words text-sm leading-relaxed text-foreground/85 [&_*]:max-w-full [&_img]:h-auto [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto"
                     dangerouslySetInnerHTML={{ __html: message.html }}
                   />
+                  <MessageAttachments messageId={message.id} />
                 </article>
               )
             })}
@@ -238,6 +300,7 @@ export function ThreadView({ thread, messages, variant = "default" }: ThreadView
                   className="prose prose-sm max-w-none overflow-hidden break-words text-sm [&_*]:max-w-full [&_img]:h-auto [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto"
                   dangerouslySetInnerHTML={{ __html: message.html }}
                 />
+                <MessageAttachments messageId={message.id} />
               </CardContent>
             </Card>
           )

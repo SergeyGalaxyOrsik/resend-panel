@@ -39,7 +39,7 @@ export async function POST(request: Request) {
       )
 
       const attachment = await createAttachmentRecord(
-        "", // messageId will be set later
+        null, // messageId will be set later
         workspace.id,
         file.name,
         file.type || "application/octet-stream",

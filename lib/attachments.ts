@@ -56,7 +56,7 @@ export async function deleteAttachmentFile(storagePath: string): Promise<void> {
 }
 
 export async function createAttachmentRecord(
-  messageId: string,
+  messageId: string | null,
   workspaceId: string,
   filename: string,
   contentType: string,

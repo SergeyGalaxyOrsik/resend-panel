@@ -124,7 +124,7 @@ export type AuthState = {
 
 export type Attachment = {
   id: ID
-  messageId: ID
+  messageId: ID | null
   workspaceId: ID
   filename: string
   contentType: string

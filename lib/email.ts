@@ -8,6 +8,25 @@ export function normalizeRecipients(value: string) {
     .filter(Boolean)
 }
 
+/** Pulls the bare address out of `Name <addr@example.com>` and lowercases it. */
+export function extractEmailAddress(value: string) {
+  const angle = value.match(/<([^>]+)>/)
+  const candidate = angle ? angle[1] : value
+  return candidate.trim().toLowerCase()
+}
+
+/** Normalizes a `to` field that may arrive as an array, a string, or a mix of formats. */
+export function normalizeAddressList(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value.map(String) : normalizeRecipients(String(value ?? ""))
+  return Array.from(new Set(raw.map(extractEmailAddress).filter(Boolean)))
+}
+
+/** Builds the `from` header for a mailbox, falling back to the workspace sender name. */
+export function formatFromHeader(mailbox: { address: string; displayName: string }, fallbackName: string) {
+  const name = mailbox.displayName.trim() || fallbackName.trim()
+  return name ? `${name} <${mailbox.address}>` : mailbox.address
+}
+
 export function normalizeSubject(subject: string) {
   const trimmed = subject.trim()
   return trimmed || "No subject"
@@ -70,7 +89,10 @@ export function extractInboundPayload(payload: unknown) {
 
   const subject = String(body.subject ?? record.subject ?? "No subject")
   const from = String(body.from ?? record.from ?? "unknown@example.com")
-  const to = Array.isArray(body.to) ? body.to.map(String) : normalizeRecipients(String(body.to ?? ""))
+  const rawTo = body.to ?? record.to
+  const to = Array.isArray(rawTo) ? rawTo.map(String) : normalizeRecipients(String(rawTo ?? ""))
+  // Bare, lowercased recipients used to find the mailbox this email arrived at.
+  const toAddresses = normalizeAddressList(rawTo)
 
   const html = pickFirstNonEmptyString(body, record, [
     "html",
@@ -123,7 +145,7 @@ export function extractInboundPayload(payload: unknown) {
     "id",
   ])
 
-  return { subject, from, to, text, html, messageId, inReplyTo, references, emailId }
+  return { subject, from, to, toAddresses, text, html, messageId, inReplyTo, references, emailId }
 }
 
 function pickFirstNonEmptyString(

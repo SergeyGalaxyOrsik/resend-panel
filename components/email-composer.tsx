@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import type { AuthState } from "@/lib/types"
+import type { AuthState, Mailbox } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { FileAttachments } from "@/components/file-attachments"
 
@@ -27,6 +27,8 @@ type EmailComposerProps = {
   replyToMessageId?: string
   hideRecipients?: boolean
   compact?: boolean
+  mailboxes?: Mailbox[]
+  defaultMailboxId?: string
 }
 
 const initialState: AuthState = {}
@@ -67,6 +69,8 @@ export function EmailComposer({
   replyToMessageId,
   hideRecipients = false,
   compact = false,
+  mailboxes = [],
+  defaultMailboxId = "",
 }: EmailComposerProps) {
   const [state, formAction, pending] = useActionState(action, initialState)
   const [text, setText] = useState(initialText)
@@ -79,6 +83,7 @@ export function EmailComposer({
   }>>([])
   const t = useTranslations("compose")
   const previewHtml = useMemo(() => renderPreview(text, t("previewPlaceholder")), [text, t])
+  const hasMailboxes = mailboxes.length > 0
 
   return (
     <div className={cn("grid gap-6", compact ? "lg:grid-cols-[1.2fr_0.8fr]" : "xl:grid-cols-[1.3fr_0.7fr]")}>
@@ -108,6 +113,26 @@ export function EmailComposer({
             ))}
 
             <div className="grid gap-4 md:grid-cols-2">
+              {mailboxes.length > 1 ? (
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="mailboxId">{t("from")}</Label>
+                  <select
+                    id="mailboxId"
+                    name="mailboxId"
+                    defaultValue={defaultMailboxId || mailboxes[0].id}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {mailboxes.map((mailbox) => (
+                      <option key={mailbox.id} value={mailbox.id}>
+                        {mailbox.displayName ? `${mailbox.displayName} <${mailbox.address}>` : mailbox.address}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : mailboxes.length === 1 ? (
+                <input type="hidden" name="mailboxId" value={mailboxes[0].id} />
+              ) : null}
+
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="subject">{t("subject")}</Label>
                 <Input id="subject" name="subject" defaultValue={initialSubject} placeholder={t("subjectPlaceholder")} required />
@@ -155,11 +180,17 @@ export function EmailComposer({
               disabled={pending}
             />
 
+            {!hasMailboxes ? (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {t("noMailbox")}
+              </p>
+            ) : null}
+
             <div className="flex flex-wrap gap-3">
               <Button type="submit" name="intent" value="save" variant="outline">
                 {t("saveDraft")}
               </Button>
-              <Button type="submit" name="intent" value="send" disabled={pending}>
+              <Button type="submit" name="intent" value="send" disabled={pending || !hasMailboxes}>
                 {pending ? t("sending") : t("sendMessage")}
               </Button>
             </div>

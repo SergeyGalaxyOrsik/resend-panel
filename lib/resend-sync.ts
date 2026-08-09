@@ -1,4 +1,4 @@
-import { buildHtmlFromText } from "@/lib/email"
+import { buildHtmlFromText, extractEmailAddress } from "@/lib/email"
 import {
   createEvent,
   createMessage,
@@ -6,11 +6,12 @@ import {
   findMessageByProviderId,
   getCurrentSettings,
   getCurrentWorkspace,
+  listMailboxes,
   recordInboundReceipt,
   refreshAllThreadLastMessageAt,
   updateMessage,
 } from "@/lib/store"
-import type { MessageStatus } from "@/lib/types"
+import type { Mailbox, MessageStatus } from "@/lib/types"
 
 type ResendListResponse<T> = {
   data: T[]
@@ -181,6 +182,18 @@ export async function syncResendHistory(token: string) {
     fetchResendList<ResendReceivedItem>(token, "/emails/receiving"),
   ])
 
+  // Imported mail is attached to a mailbox the same way live mail is: outbound by
+  // sender address, inbound by recipient. Anything else stays unlinked (owner-only).
+  const mailboxes = await listMailboxes(workspace.id)
+  const findMailbox = (addresses: string[]): Mailbox | undefined => {
+    for (const address of addresses) {
+      const normalized = extractEmailAddress(address)
+      const match = mailboxes.find((mailbox) => mailbox.address.toLowerCase() === normalized)
+      if (match) return match
+    }
+    return undefined
+  }
+
   let imported = 0
   let backfilled = 0
 
@@ -204,9 +217,14 @@ export async function syncResendHistory(token: string) {
     const text = String(detail?.text ?? subject)
     const html = String(detail?.html ?? buildHtmlFromText(text))
 
-    const thread = await ensureThread(workspace.id, subject, [from.email, ...to], { messageAt: occurredAt })
+    const mailbox = findMailbox([from.email])
+    const thread = await ensureThread(workspace.id, subject, [from.email, ...to], {
+      messageAt: occurredAt,
+      mailboxId: mailbox?.id,
+    })
     const message = await createMessage({
       workspaceId: workspace.id,
+      mailboxId: mailbox?.id,
       threadId: thread.id,
       direction: "outbound",
       status: mapLastEvent(String(item.last_event ?? detail?.last_event ?? "")),
@@ -252,9 +270,14 @@ export async function syncResendHistory(token: string) {
     const text = String(detail?.text ?? subject)
     const html = String(detail?.html ?? buildHtmlFromText(text))
 
-    const thread = await ensureThread(workspace.id, subject, [from.email, ...to], { messageAt: occurredAt })
+    const mailbox = findMailbox(to)
+    const thread = await ensureThread(workspace.id, subject, [from.email, ...to], {
+      messageAt: occurredAt,
+      mailboxId: mailbox?.id,
+    })
     const message = await createMessage({
       workspaceId: workspace.id,
+      mailboxId: mailbox?.id,
       threadId: thread.id,
       direction: "inbound",
       status: "received",

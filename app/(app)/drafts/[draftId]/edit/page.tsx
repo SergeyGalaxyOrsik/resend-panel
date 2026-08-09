@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation"
 import { getTranslations } from "next-intl/server"
 import { requireCurrentUser } from "@/lib/auth"
-import { getCurrentWorkspace, listDrafts } from "@/lib/store"
+import { getCurrentWorkspace, listDrafts, listMailboxes, listMailboxesForUser } from "@/lib/store"
 import { composeAction } from "@/app/actions"
 import { EmailComposer } from "@/components/email-composer"
 
@@ -11,14 +11,19 @@ type Props = {
 
 export default async function EditDraftPage({ params }: Props) {
   const { draftId } = await params
-  await requireCurrentUser()
+  const user = await requireCurrentUser()
   const workspace = await getCurrentWorkspace()
   if (!workspace) return null
 
   const t = await getTranslations("compose")
-  const drafts = await listDrafts(workspace.id)
+  const drafts = await listDrafts(workspace.id, user.id)
   const draft = drafts.find((d) => d.id === draftId)
   if (!draft) notFound()
+
+  const mailboxes =
+    user.role === "owner"
+      ? await listMailboxes(workspace.id)
+      : await listMailboxesForUser(workspace.id, user.id)
 
   return (
     <EmailComposer
@@ -32,6 +37,8 @@ export default async function EditDraftPage({ params }: Props) {
       initialText={draft.text}
       threadId={draft.threadId}
       draftId={draft.id}
+      mailboxes={mailboxes}
+      defaultMailboxId={mailboxes[0]?.id ?? ""}
     />
   )
 }

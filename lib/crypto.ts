@@ -69,3 +69,16 @@ export function createToken(prefix = "sess") {
   return `${prefix}_${crypto.randomUUID()}`
 }
 
+// Alphabet without look-alikes (0/O, 1/l/I), because the owner reads this out loud.
+const TEMPORARY_PASSWORD_ALPHABET = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+export function generateTemporaryPassword(length = 16) {
+  const bytes = crypto.randomBytes(length)
+  let password = ""
+  for (let index = 0; index < length; index += 1) {
+    password += TEMPORARY_PASSWORD_ALPHABET[bytes[index] % TEMPORARY_PASSWORD_ALPHABET.length]
+  }
+
+  return password
+}
+

@@ -1,5 +1,5 @@
 import { getLocale, getTranslations } from "next-intl/server"
-import { requireCurrentUser } from "@/lib/auth"
+import { getMailboxScope, requireCurrentUser } from "@/lib/auth"
 import { getCurrentWorkspace, getStats } from "@/lib/store"
 import { StatCards } from "@/components/stat-cards"
 import { EmptyState } from "@/components/empty-state"
@@ -8,13 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 
 export default async function DashboardPage() {
-  await requireCurrentUser()
+  const user = await requireCurrentUser()
   const workspace = await getCurrentWorkspace()
   if (!workspace) return null
 
   const t = await getTranslations("dashboard")
   const locale = await getLocale()
-  const stats = await getStats(workspace.id)
+  const scope = await getMailboxScope(user, workspace.id)
+  const stats = await getStats(workspace.id, user.id, scope)
 
   return (
     <div className="space-y-6">

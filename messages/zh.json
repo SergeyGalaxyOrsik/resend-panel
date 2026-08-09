@@ -38,7 +38,10 @@
     "statistics": "统计",
     "settings": "设置",
     "conversation": "对话",
-    "logOut": "退出登录"
+    "logOut": "退出登录",
+    "users": "用户",
+    "mailboxes": "邮箱地址",
+    "administration": "管理"
   },
   "auth": {
     "email": "邮箱",
@@ -49,7 +52,12 @@
     "signInDescription": "输入凭据以访问您的工作区。",
     "createAccount": "创建账户",
     "createAccountDescription": "第一个账户将成为工作区所有者。",
-    "signInInstead": "改为登录"
+    "signInInstead": "改为登录",
+    "changePassword": "修改密码",
+    "changePasswordDescription": "为您的账户设置新密码。",
+    "changePasswordRequired": "您的账户使用的是临时密码，请设置新密码后继续。",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码"
   },
   "dashboard": {
     "totalMessages": "消息总数",
@@ -118,7 +126,9 @@
     "sendMessage": "发送",
     "sending": "发送中...",
     "preview": "预览",
-    "previewDescription": "将通过 Resend 发送的已清理 HTML。"
+    "previewDescription": "将通过 Resend 发送的已清理 HTML。",
+    "from": "发件地址",
+    "noMailbox": "尚未为您分配邮箱地址。请让工作区所有者分配后再发送邮件。"
   },
   "drafts": {
     "title": "草稿",
@@ -172,7 +182,8 @@
     "testConnection": "测试连接",
     "testing": "测试中...",
     "syncHistory": "同步历史",
-    "syncing": "同步中..."
+    "syncing": "同步中...",
+    "mailboxesHint": "现在邮件从「邮箱地址」中管理的地址发送。下面的发件人名称仅在邮箱地址未设置显示名称时作为后备使用。"
   },
   "language": {
     "label": "语言"
@@ -206,6 +217,82 @@
     "addRecipient": "请至少添加一位收件人。",
     "messageSent": "消息已发送。",
     "settingsSaved": "已为 {email} 保存设置。",
-    "syncCompleted": "从 Resend 新导入 {imported} 条并更新 {backfilled} 条已有消息（账户中共 {sent} 条已发送，{received} 条入站）。"
+    "syncCompleted": "从 Resend 新导入 {imported} 条并更新 {backfilled} 条已有消息（账户中共 {sent} 条已发送，{received} 条入站）。",
+    "accountDeactivated": "该账户已被停用。",
+    "currentPasswordInvalid": "当前密码不正确。",
+    "passwordMustDiffer": "新密码必须与当前密码不同。",
+    "emailRequired": "请填写邮箱。",
+    "emailAlreadyExists": "该邮箱的账户已存在。",
+    "userNotFound": "未找到用户。",
+    "cannotModifyOwner": "无法修改工作区所有者。",
+    "userCreated": "已为 {email} 创建账户。",
+    "userDeleted": "已删除 {email}。",
+    "userActivated": "已启用 {email}。",
+    "userDeactivated": "已停用 {email}。",
+    "mailboxesAssigned": "已更新 {email} 的邮箱地址。",
+    "mailboxAddressInvalid": "请输入有效的邮箱地址。",
+    "mailboxExists": "该地址已存在于工作区中。",
+    "mailboxNotFound": "未找到邮箱地址。",
+    "mailboxNotAllowed": "您无法从该邮箱地址发送邮件。",
+    "noMailboxAssigned": "尚未为您分配邮箱地址。",
+    "mailboxCreated": "已创建邮箱地址 {address}。",
+    "mailboxUpdated": "已更新邮箱地址 {address}。",
+    "mailboxDeleted": "已删除邮箱地址 {address}。"
+  },
+  "users": {
+    "title": "用户",
+    "description": "创建账户并决定每个人可以使用哪些邮箱地址。",
+    "addUser": "添加用户",
+    "addUserDescription": "账户创建时会生成临时密码，仅显示一次。",
+    "email": "邮箱",
+    "emailPlaceholder": "person@company.com",
+    "role": "角色",
+    "roleOwner": "所有者",
+    "roleMember": "成员",
+    "mailboxes": "邮箱地址",
+    "noMailboxes": "无",
+    "noMailboxesYet": "请先创建邮箱地址，然后在此分配。",
+    "status": "状态",
+    "statusActive": "已启用",
+    "statusInactive": "已停用",
+    "statusPendingPassword": "待修改密码",
+    "created": "创建时间",
+    "actions": "操作",
+    "assignMailboxes": "分配邮箱地址",
+    "activate": "启用",
+    "activateDescription": "{email} 将可以重新登录。",
+    "deactivate": "停用",
+    "deactivateDescription": "{email} 将被登出并无法再登录。",
+    "delete": "删除",
+    "deleteTitle": "删除用户",
+    "deleteDescription": "{email} 及其会话和草稿将被删除。邮件仍保留在工作区中。",
+    "temporaryPassword": "临时密码",
+    "temporaryPasswordHint": "请立即复制：密码仅以哈希形式存储，无法再次显示。",
+    "userCreated": "已为 {email} 创建账户。",
+    "create": "创建",
+    "save": "保存",
+    "cancel": "取消",
+    "done": "完成"
+  },
+  "mailboxes": {
+    "title": "邮箱地址",
+    "description": "该工作区用于发送和接收邮件的地址。",
+    "addMailbox": "添加邮箱地址",
+    "addMailboxDescription": "请使用已在 Resend 中验证的域名地址。",
+    "address": "地址",
+    "addressPlaceholder": "team@company.com",
+    "displayName": "显示名称",
+    "displayNamePlaceholder": "支持团队",
+    "assignedUsers": "用户数",
+    "created": "创建时间",
+    "actions": "操作",
+    "rename": "重命名",
+    "delete": "删除",
+    "deleteTitle": "删除邮箱地址",
+    "deleteDescription": "{address} 的邮件会保留，但会失去归属关系，届时仅所有者可见。",
+    "empty": "尚无邮箱地址。添加一个即可开始收发邮件。",
+    "create": "创建",
+    "save": "保存",
+    "cancel": "取消"
   }
 }

@@ -2,12 +2,36 @@ export type ID = string
 
 export type Timestamp = string
 
+export type UserRole = "owner" | "member"
+
 export type User = {
   id: ID
   email: string
   passwordHash: string
+  role: UserRole
+  isActive: boolean
+  mustChangePassword: boolean
   createdAt: Timestamp
 }
+
+export type Mailbox = {
+  id: ID
+  workspaceId: ID
+  address: string
+  displayName: string
+  createdAt: Timestamp
+}
+
+export type ManagedUser = Omit<User, "passwordHash"> & {
+  mailboxes: Mailbox[]
+}
+
+/**
+ * Which mailboxes a request is allowed to read.
+ * `all` is the owner; `mailboxes` restricts every read to the listed ids, which
+ * also hides mail with no mailbox link (unrecognised inbound, deleted mailboxes).
+ */
+export type MailboxScope = { kind: "all" } | { kind: "mailboxes"; mailboxIds: ID[] }
 
 export type Workspace = {
   id: ID
@@ -36,6 +60,7 @@ export type ResendSettings = {
 export type Thread = {
   id: ID
   workspaceId: ID
+  mailboxId?: ID
   subject: string
   participants: string[]
   createdAt: Timestamp
@@ -56,6 +81,7 @@ export type MessageStatus =
 export type Message = {
   id: ID
   workspaceId: ID
+  mailboxId?: ID
   threadId: ID
   direction: MessageDirection
   status: MessageStatus
@@ -97,6 +123,7 @@ export type MessageEvent = {
 export type Draft = {
   id: ID
   workspaceId: ID
+  userId?: ID
   threadId?: ID
   subject: string
   to: string
@@ -120,6 +147,12 @@ export type AppStore = {
 export type AuthState = {
   error?: string
   success?: string
+}
+
+/** `createUserAction` returns the generated password once, so the owner can hand it over. */
+export type CreateUserState = AuthState & {
+  createdEmail?: string
+  temporaryPassword?: string
 }
 
 export type Attachment = {

@@ -3,39 +3,70 @@
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { getTranslations } from "next-intl/server"
-import { clearSession, establishSession, registerOwner, requireCurrentUser, verifyLogin } from "@/lib/auth"
+import {
+  clearSession,
+  establishSession,
+  getMailboxScope,
+  registerOwner,
+  requireAuthenticatedUser,
+  requireCurrentUser,
+  requireOwner,
+  verifyLogin,
+} from "@/lib/auth"
 import {
   buildHtmlFromText,
   buildTextPreview,
   extractInboundPayload,
   fetchResendEmail,
+  formatFromHeader,
   getReplyRecipients,
   getResendToken,
   normalizeRecipients,
   normalizeSubject,
   renderThreadSubject,
 } from "@/lib/email"
-import { encryptSecret, normalizeEmail } from "@/lib/crypto"
+import {
+  encryptSecret,
+  generateTemporaryPassword,
+  hashPassword,
+  normalizeEmail,
+  verifyPassword,
+} from "@/lib/crypto"
 import {
   createEvent,
+  createMailbox,
   createMessage,
+  createUser,
   createWorkspaceForOwner,
   deleteDraft,
+  deleteMailbox,
+  deleteSessionsForUser,
+  deleteUser,
   ensureThread,
+  findMailboxByAddress,
+  findMailboxById,
   findMessageByProviderId,
+  findUserByEmail,
+  findUserById,
   getBootstrapState,
   getCurrentSettings,
   getCurrentWorkspace,
   getThreadWithMessages,
   hasInboundReceipt,
+  listMailboxes,
+  listMailboxesForUser,
   recordInboundReceipt,
+  setMailboxesForUser,
+  setUserActive,
+  updateMailbox,
   upsertDraft,
   updateMessage,
   updateResendSettings,
+  updateUserPassword,
 } from "@/lib/store"
 import { mapResendEventType } from "@/lib/webhooks"
 import { syncResendHistory } from "@/lib/resend-sync"
-import type { AuthState } from "@/lib/types"
+import type { AuthState, CreateUserState, Mailbox } from "@/lib/types"
 
 function readField(formData: FormData, key: string) {
   const value = formData.get(key)
@@ -94,8 +125,44 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
     return { error: t("invalidCredentials") }
   }
 
+  if (!user.isActive) {
+    return { error: t("accountDeactivated") }
+  }
+
   await clearSession()
   await establishSession(user.id)
+  redirect(user.mustChangePassword ? "/change-password" : "/dashboard")
+}
+
+export async function changePasswordAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const t = await getTranslations("errors")
+  const user = await requireAuthenticatedUser()
+
+  const currentPassword = readField(formData, "currentPassword")
+  const password = readField(formData, "password")
+  const confirmPassword = readField(formData, "confirmPassword")
+
+  if (!currentPassword || !password) {
+    return { error: t("emailPasswordRequired") }
+  }
+
+  if (!verifyPassword(currentPassword, user.passwordHash)) {
+    return { error: t("currentPasswordInvalid") }
+  }
+
+  if (password.length < 8) {
+    return { error: t("passwordMinLength") }
+  }
+
+  if (password !== confirmPassword) {
+    return { error: t("passwordsDoNotMatch") }
+  }
+
+  if (password === currentPassword) {
+    return { error: t("passwordMustDiffer") }
+  }
+
+  await updateUserPassword(user.id, hashPassword(password), false)
   redirect("/dashboard")
 }
 
@@ -106,7 +173,7 @@ export async function logoutAction() {
 
 export async function saveSettingsAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const t = await getTranslations("errors")
-  const user = await requireCurrentUser()
+  const user = await requireOwner()
   const workspace = await getCurrentWorkspace()
   if (!workspace) {
     return { error: t("workspaceMissing") }
@@ -137,7 +204,7 @@ export async function saveSettingsAction(_prev: AuthState, formData: FormData): 
 
 export async function testResendConnectionAction(_prev: AuthState): Promise<AuthState> {
   const t = await getTranslations("errors")
-  await requireCurrentUser()
+  await requireOwner()
   const settings = await getCurrentSettings()
   const token = getResendToken(settings?.tokenEncrypted)
 
@@ -164,7 +231,7 @@ export async function testResendConnectionAction(_prev: AuthState): Promise<Auth
 
 export async function syncResendHistoryAction(_prev: AuthState): Promise<AuthState> {
   const t = await getTranslations("errors")
-  await requireCurrentUser()
+  await requireOwner()
   const settings = await getCurrentSettings()
   const token = getResendToken(settings?.tokenEncrypted)
 
@@ -198,6 +265,7 @@ async function sendMessage(
   workspaceId: string,
   settingsToken: string | null,
   settings: Awaited<ReturnType<typeof getCurrentSettings>>,
+  mailbox: Mailbox,
   payload: {
     subject: string
     text: string
@@ -213,12 +281,14 @@ async function sendMessage(
   const t = await getTranslations("errors")
   const subject = normalizeSubject(payload.subject)
   const html = buildHtmlFromText(payload.text)
-  const fromName = settings?.fromName || "Resend Panel"
-  const fromEmail = settings?.fromEmail || "onboarding@resend.dev"
-  const from = `${fromName} <${fromEmail}>`
+  // The sender comes from the selected mailbox, not from the workspace-wide settings.
+  const fromName = mailbox.displayName.trim() || settings?.fromName || "Resend Panel"
+  const fromEmail = mailbox.address
+  const from = formatFromHeader(mailbox, settings?.fromName || "Resend Panel")
 
   const message = await createMessage({
     workspaceId,
+    mailboxId: mailbox.id,
     threadId: payload.threadId || "",
     direction: "outbound",
     status: "queued",
@@ -318,7 +388,7 @@ async function sendMessage(
 
 export async function composeAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const t = await getTranslations("errors")
-  await requireCurrentUser()
+  const user = await requireCurrentUser()
   const workspace = await getCurrentWorkspace()
   const settings = await getCurrentSettings()
 
@@ -326,6 +396,7 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
     return { error: t("workspaceMissing") }
   }
 
+  const scope = await getMailboxScope(user, workspace.id)
   const intent = readField(formData, "intent") || "send"
   const subject = readField(formData, "subject")
   const text = readField(formData, "text")
@@ -335,6 +406,7 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
   const threadId = readField(formData, "threadId") || undefined
   const replyToMessageId = readField(formData, "replyToMessageId") || undefined
   const draftId = readField(formData, "draftId") || undefined
+  const mailboxId = readField(formData, "mailboxId")
   const attachmentIds = formData.getAll("attachmentIds") as string[]
 
   if (!subject && intent !== "save") {
@@ -346,10 +418,28 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
   }
 
   if (intent === "save") {
-    await upsertDraft(workspace.id, { id: draftId, threadId, subject, to: to.join(", "), cc: cc.join(", "), bcc: bcc.join(", "), text })
+    await upsertDraft(workspace.id, user.id, { id: draftId, threadId, subject, to: to.join(", "), cc: cc.join(", "), bcc: bcc.join(", "), text })
     revalidatePath("/drafts")
     revalidatePath("/compose")
     return { success: t("draftSaved") }
+  }
+
+  // The mailbox is re-checked here: the select in the UI is only a convenience.
+  const allowedMailboxes =
+    user.role === "owner"
+      ? await listMailboxes(workspace.id)
+      : await listMailboxesForUser(workspace.id, user.id)
+
+  if (!allowedMailboxes.length) {
+    return { error: t("noMailboxAssigned") }
+  }
+
+  const mailbox = mailboxId
+    ? allowedMailboxes.find((item) => item.id === mailboxId)
+    : allowedMailboxes[0]
+
+  if (!mailbox) {
+    return { error: t("mailboxNotAllowed") }
   }
 
   let finalRecipients = to
@@ -359,7 +449,7 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
   let references: string[] = []
 
   if (threadId) {
-    const thread = await getThreadWithMessages(workspace.id, threadId)
+    const thread = await getThreadWithMessages(workspace.id, threadId, scope)
     if (!thread) {
       return { error: t("threadNotFound") }
     }
@@ -379,15 +469,15 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
     const last = thread.messages[thread.messages.length - 1]
     references = last?.references?.length ? [...last.references] : replyTarget ? [replyTarget] : []
   } else {
-    const participants = Array.from(new Set([...(settings?.fromEmail ? [settings.fromEmail] : []), ...finalRecipients]))
-    const thread = await ensureThread(workspace.id, finalSubject, participants)
+    const participants = Array.from(new Set([mailbox.address, ...finalRecipients]))
+    const thread = await ensureThread(workspace.id, finalSubject, participants, { mailboxId: mailbox.id })
     finalThreadId = thread.id
   }
 
   await requireAtLeastOneRecipient(finalRecipients)
 
   const settingsToken = getResendToken(settings?.tokenEncrypted)
-  const result = await sendMessage(workspace.id, settingsToken, settings, {
+  const result = await sendMessage(workspace.id, settingsToken, settings, mailbox, {
     subject: finalSubject,
     text,
     to: finalRecipients,
@@ -404,7 +494,7 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
   }
 
   if (draftId) {
-    await deleteDraft(draftId)
+    await deleteDraft(draftId, user.id)
   }
 
   revalidatePath("/dashboard")
@@ -431,12 +521,20 @@ export async function inboundWebhookAction(requestBody: unknown) {
     return { duplicate: true }
   }
 
+  // Route the email to the mailbox it was addressed to. If none matches, it is stored
+  // without a mailbox link, which makes it visible to the owner only.
+  let mailbox: Mailbox | null = null
+  for (const address of payload.toAddresses) {
+    mailbox = await findMailboxByAddress(workspace.id, address)
+    if (mailbox) break
+  }
+
   const receivedAt = new Date().toISOString()
   const thread = await ensureThread(
     workspace.id,
     payload.subject,
     Array.from(new Set([payload.from, ...payload.to])),
-    { messageAt: receivedAt }
+    { messageAt: receivedAt, mailboxId: mailbox?.id }
   )
 
   // Fetch email content from Resend API if html/text are missing (webhook doesn't include body)
@@ -462,6 +560,7 @@ export async function inboundWebhookAction(requestBody: unknown) {
 
   const message = await createMessage({
     workspaceId: workspace.id,
+    mailboxId: mailbox?.id,
     threadId: thread.id,
     direction: "inbound",
     status: "received",
@@ -530,4 +629,189 @@ export async function resendEventWebhookAction(requestBody: unknown) {
   revalidatePath("/dashboard")
 
   return { processed: true, type: mapped }
+}
+
+// ── User administration (owner only) ───────────────────────
+
+export async function createUserAction(_prev: CreateUserState, formData: FormData): Promise<CreateUserState> {
+  const t = await getTranslations("errors")
+  await requireOwner()
+  const workspace = await getCurrentWorkspace()
+  if (!workspace) {
+    return { error: t("workspaceMissing") }
+  }
+
+  const email = normalizeEmail(readField(formData, "email"))
+  if (!email) {
+    return { error: t("emailRequired") }
+  }
+
+  if (await findUserByEmail(email)) {
+    return { error: t("emailAlreadyExists") }
+  }
+
+  // The generated password is returned once and never stored in the clear.
+  const temporaryPassword = generateTemporaryPassword()
+  const user = await createUser(email, hashPassword(temporaryPassword), {
+    role: "member",
+    mustChangePassword: true,
+  })
+
+  const mailboxIds = formData.getAll("mailboxIds").map(String).filter(Boolean)
+  if (mailboxIds.length) {
+    const mailboxes = await listMailboxes(workspace.id)
+    const allowed = mailboxIds.filter((id) => mailboxes.some((mailbox) => mailbox.id === id))
+    await setMailboxesForUser(user.id, allowed)
+  }
+
+  revalidatePath("/users")
+  return { success: t("userCreated", { email }), createdEmail: email, temporaryPassword }
+}
+
+export async function assignMailboxesAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const t = await getTranslations("errors")
+  await requireOwner()
+  const workspace = await getCurrentWorkspace()
+  if (!workspace) {
+    return { error: t("workspaceMissing") }
+  }
+
+  const userId = readField(formData, "userId")
+  const user = userId ? await findUserById(userId) : null
+  if (!user) {
+    return { error: t("userNotFound") }
+  }
+
+  const mailboxes = await listMailboxes(workspace.id)
+  const mailboxIds = formData
+    .getAll("mailboxIds")
+    .map(String)
+    .filter((id) => mailboxes.some((mailbox) => mailbox.id === id))
+
+  await setMailboxesForUser(user.id, mailboxIds)
+
+  revalidatePath("/users")
+  return { success: t("mailboxesAssigned", { email: user.email }) }
+}
+
+export async function setUserActiveAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const t = await getTranslations("errors")
+  const owner = await requireOwner()
+
+  const userId = readField(formData, "userId")
+  const isActive = readField(formData, "isActive") === "true"
+  const user = userId ? await findUserById(userId) : null
+
+  if (!user) {
+    return { error: t("userNotFound") }
+  }
+
+  if (user.id === owner.id) {
+    return { error: t("cannotModifyOwner") }
+  }
+
+  // Deactivating drops the account's sessions, so an open tab stops working immediately.
+  await setUserActive(user.id, isActive)
+
+  revalidatePath("/users")
+  return { success: isActive ? t("userActivated", { email: user.email }) : t("userDeactivated", { email: user.email }) }
+}
+
+export async function deleteUserAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const t = await getTranslations("errors")
+  const owner = await requireOwner()
+
+  const userId = readField(formData, "userId")
+  const user = userId ? await findUserById(userId) : null
+
+  if (!user) {
+    return { error: t("userNotFound") }
+  }
+
+  if (user.id === owner.id) {
+    return { error: t("cannotModifyOwner") }
+  }
+
+  await deleteSessionsForUser(user.id)
+  await deleteUser(user.id)
+
+  revalidatePath("/users")
+  return { success: t("userDeleted", { email: user.email }) }
+}
+
+// ── Mailbox administration (owner only) ────────────────────
+
+export async function createMailboxAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const t = await getTranslations("errors")
+  await requireOwner()
+  const workspace = await getCurrentWorkspace()
+  if (!workspace) {
+    return { error: t("workspaceMissing") }
+  }
+
+  const address = normalizeEmail(readField(formData, "address"))
+  const displayName = readField(formData, "displayName")
+
+  if (!address || !address.includes("@")) {
+    return { error: t("mailboxAddressInvalid") }
+  }
+
+  if (await findMailboxByAddress(workspace.id, address)) {
+    return { error: t("mailboxExists") }
+  }
+
+  await createMailbox(workspace.id, address, displayName)
+
+  revalidatePath("/mailboxes")
+  revalidatePath("/users")
+  return { success: t("mailboxCreated", { address }) }
+}
+
+export async function updateMailboxAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const t = await getTranslations("errors")
+  await requireOwner()
+  const workspace = await getCurrentWorkspace()
+  if (!workspace) {
+    return { error: t("workspaceMissing") }
+  }
+
+  const mailboxId = readField(formData, "mailboxId")
+  const displayName = readField(formData, "displayName")
+  const mailbox = mailboxId ? await findMailboxById(workspace.id, mailboxId) : null
+
+  if (!mailbox) {
+    return { error: t("mailboxNotFound") }
+  }
+
+  await updateMailbox(mailbox.id, displayName)
+
+  revalidatePath("/mailboxes")
+  revalidatePath("/users")
+  return { success: t("mailboxUpdated", { address: mailbox.address }) }
+}
+
+export async function deleteMailboxAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const t = await getTranslations("errors")
+  await requireOwner()
+  const workspace = await getCurrentWorkspace()
+  if (!workspace) {
+    return { error: t("workspaceMissing") }
+  }
+
+  const mailboxId = readField(formData, "mailboxId")
+  const mailbox = mailboxId ? await findMailboxById(workspace.id, mailboxId) : null
+
+  if (!mailbox) {
+    return { error: t("mailboxNotFound") }
+  }
+
+  // Mail is kept: the foreign keys null the link, so those threads and messages
+  // fall back to being readable by the owner only.
+  await deleteMailbox(mailbox.id)
+
+  revalidatePath("/mailboxes")
+  revalidatePath("/users")
+  revalidatePath("/inbox")
+  revalidatePath("/sent")
+  return { success: t("mailboxDeleted", { address: mailbox.address }) }
 }

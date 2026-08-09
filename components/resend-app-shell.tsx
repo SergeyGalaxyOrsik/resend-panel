@@ -5,12 +5,14 @@ import { useTranslations } from "next-intl"
 import { Link, usePathname } from "@/i18n/navigation"
 import {
   ArchiveIcon,
+  AtSignIcon,
   BarChart3Icon,
   FilePenLineIcon,
   InboxIcon,
   MailIcon,
   SendIcon,
   Settings2Icon,
+  UsersIcon,
 } from "lucide-react"
 import { NavUser } from "@/components/nav-user"
 import { LanguageSwitcher } from "@/components/language-switcher"
@@ -42,11 +44,15 @@ import {
 import { isNavActive } from "@/lib/nav"
 import { cn } from "@/lib/utils"
 import type { Thread, User, Workspace } from "@/lib/types"
+
+// Only what the shell renders. Passing the whole User would put its password hash
+// into the RSC payload sent to the browser.
+type ShellUser = Pick<User, "email" | "role">
 import type { ReactNode } from "react"
 
 type ResendAppShellProps = {
   children: ReactNode
-  user: User
+  user: ShellUser
   workspace: Workspace | null
   threads: Thread[]
   logoutAction: () => Promise<void>
@@ -57,13 +63,15 @@ function AppSidebar({
   workspace,
   logoutAction,
 }: {
-  user: User
+  user: ShellUser
   workspace: Workspace | null
   logoutAction: () => Promise<void>
 }) {
   const pathname = usePathname()
   const t = useTranslations("nav")
   const tc = useTranslations("common")
+
+  const isOwner = user.role === "owner"
 
   const mainNav = [
     { href: "/dashboard" as const, label: t("dashboard"), icon: BarChart3Icon },
@@ -72,6 +80,12 @@ function AppSidebar({
     { href: "/compose" as const, label: t("compose"), icon: FilePenLineIcon },
     { href: "/drafts" as const, label: t("drafts"), icon: ArchiveIcon },
     { href: "/statistics" as const, label: t("statistics"), icon: BarChart3Icon },
+  ]
+
+  // Cosmetic only: the routes themselves are gated by requireOwner() on the server.
+  const adminNav = [
+    { href: "/users" as const, label: t("users"), icon: UsersIcon },
+    { href: "/mailboxes" as const, label: t("mailboxes"), icon: AtSignIcon },
     { href: "/settings" as const, label: t("settings"), icon: Settings2Icon },
   ]
 
@@ -119,6 +133,30 @@ function AppSidebar({
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {isOwner ? (
+          <SidebarGroup>
+            <SidebarGroupLabel>{t("administration")}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {adminNav.map((item) => {
+                  const Icon = item.icon
+                  const active = isNavActive(pathname, item.href)
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                        <Link href={item.href}>
+                          <Icon />
+                          <span>{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : null}
       </SidebarContent>
 
       <SidebarFooter>
@@ -154,6 +192,8 @@ export function ResendAppShell({
     { href: "/compose", label: t("compose") },
     { href: "/drafts", label: t("drafts") },
     { href: "/statistics", label: t("statistics") },
+    { href: "/users", label: t("users") },
+    { href: "/mailboxes", label: t("mailboxes") },
     { href: "/settings", label: t("settings") },
   ]
 

@@ -1,5 +1,5 @@
 import { getLocale, getTranslations } from "next-intl/server"
-import { requireCurrentUser } from "@/lib/auth"
+import { getMailboxScope, requireCurrentUser } from "@/lib/auth"
 import { getCurrentWorkspace, getStats } from "@/lib/store"
 import { StatCards } from "@/components/stat-cards"
 import { formatDate } from "@/lib/format"
@@ -8,13 +8,14 @@ import { Badge } from "@/components/ui/badge"
 import { EmptyState } from "@/components/empty-state"
 
 export default async function StatisticsPage() {
-  await requireCurrentUser()
+  const user = await requireCurrentUser()
   const workspace = await getCurrentWorkspace()
   if (!workspace) return null
 
   const t = await getTranslations("statistics")
   const locale = await getLocale()
-  const stats = await getStats(workspace.id)
+  const scope = await getMailboxScope(user, workspace.id)
+  const stats = await getStats(workspace.id, user.id, scope)
   const deliveryRate = stats.sent > 0 ? ((stats.delivered / stats.sent) * 100).toFixed(1) : "0"
   const openRate = stats.delivered > 0 ? ((stats.opened / stats.delivered) * 100).toFixed(1) : "0"
   const clickRate = stats.opened > 0 ? ((stats.clicked / stats.opened) * 100).toFixed(1) : "0"

@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table"
 
 export default async function DraftsPage() {
-  await requireCurrentUser()
+  const user = await requireCurrentUser()
   const workspace = await getCurrentWorkspace()
   if (!workspace) return null
 
@@ -26,7 +26,7 @@ export default async function DraftsPage() {
   const tn = await getTranslations("nav")
   const tc = await getTranslations("common")
   const locale = await getFormatLocale()
-  const drafts = await listDrafts(workspace.id)
+  const drafts = await listDrafts(workspace.id, user.id)
 
   return (
     <div className="min-w-0 space-y-6">

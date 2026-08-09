@@ -80,6 +80,10 @@ export function SettingsForm({
             <p className="text-xs text-muted-foreground">{t("tokenHint")}</p>
           </div>
 
+          <p className="rounded-lg border border-border/80 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            {t("mailboxesHint")}
+          </p>
+
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="fromName">{t("fromName")}</Label>

@@ -38,7 +38,10 @@
     "statistics": "Статистика",
     "settings": "Настройки",
     "conversation": "Переписка",
-    "logOut": "Выйти"
+    "logOut": "Выйти",
+    "users": "Пользователи",
+    "mailboxes": "Адреса",
+    "administration": "Администрирование"
   },
   "auth": {
     "email": "Email",
@@ -49,7 +52,12 @@
     "signInDescription": "Введите данные для доступа к рабочей области.",
     "createAccount": "Создать аккаунт",
     "createAccountDescription": "Первый аккаунт становится владельцем рабочей области.",
-    "signInInstead": "Войти вместо этого"
+    "signInInstead": "Войти вместо этого",
+    "changePassword": "Сменить пароль",
+    "changePasswordDescription": "Выберите новый пароль для своей учётной записи.",
+    "changePasswordRequired": "Ваша учётная запись использует временный пароль. Задайте новый, чтобы продолжить.",
+    "currentPassword": "Текущий пароль",
+    "newPassword": "Новый пароль"
   },
   "dashboard": {
     "totalMessages": "Всего сообщений",
@@ -118,7 +126,9 @@
     "sendMessage": "Отправить",
     "sending": "Отправка...",
     "preview": "Предпросмотр",
-    "previewDescription": "Очищенный HTML, который будет отправлен через Resend."
+    "previewDescription": "Очищенный HTML, который будет отправлен через Resend.",
+    "from": "От кого",
+    "noMailbox": "Вам пока не назначен ни один адрес. Попросите владельца назначить адрес, чтобы отправлять письма."
   },
   "drafts": {
     "title": "Черновики",
@@ -172,7 +182,8 @@
     "testConnection": "Проверить подключение",
     "testing": "Проверка...",
     "syncHistory": "Синхронизировать историю",
-    "syncing": "Синхронизация..."
+    "syncing": "Синхронизация...",
+    "mailboxesHint": "Отправка теперь идёт с адресов из раздела «Адреса». Имя отправителя ниже используется только как запасное, если у адреса не задано отображаемое имя."
   },
   "language": {
     "label": "Язык"
@@ -206,6 +217,82 @@
     "addRecipient": "Добавьте хотя бы одного получателя.",
     "messageSent": "Сообщение отправлено.",
     "settingsSaved": "Настройки сохранены для {email}.",
-    "syncCompleted": "Импортировано {imported} новых и обновлено {backfilled} существующих сообщений из Resend ({sent} отправленных, {received} входящих в аккаунте)."
+    "syncCompleted": "Импортировано {imported} новых и обновлено {backfilled} существующих сообщений из Resend ({sent} отправленных, {received} входящих в аккаунте).",
+    "accountDeactivated": "Эта учётная запись деактивирована.",
+    "currentPasswordInvalid": "Текущий пароль неверен.",
+    "passwordMustDiffer": "Новый пароль должен отличаться от текущего.",
+    "emailRequired": "Укажите email.",
+    "emailAlreadyExists": "Учётная запись с таким email уже существует.",
+    "userNotFound": "Пользователь не найден.",
+    "cannotModifyOwner": "Владельца рабочей области нельзя изменить.",
+    "userCreated": "Учётная запись для {email} создана.",
+    "userDeleted": "{email} удалён.",
+    "userActivated": "{email} активирован.",
+    "userDeactivated": "{email} деактивирован.",
+    "mailboxesAssigned": "Адреса для {email} обновлены.",
+    "mailboxAddressInvalid": "Введите корректный email-адрес.",
+    "mailboxExists": "Такой адрес уже есть в рабочей области.",
+    "mailboxNotFound": "Адрес не найден.",
+    "mailboxNotAllowed": "Вы не можете отправлять с этого адреса.",
+    "noMailboxAssigned": "Вам не назначен ни один адрес.",
+    "mailboxCreated": "Адрес {address} создан.",
+    "mailboxUpdated": "Адрес {address} обновлён.",
+    "mailboxDeleted": "Адрес {address} удалён."
+  },
+  "users": {
+    "title": "Пользователи",
+    "description": "Создавайте учётные записи и назначайте им почтовые адреса.",
+    "addUser": "Добавить пользователя",
+    "addUserDescription": "Учётная запись создаётся с временным паролем, он показывается один раз.",
+    "email": "Email",
+    "emailPlaceholder": "person@company.com",
+    "role": "Роль",
+    "roleOwner": "Владелец",
+    "roleMember": "Участник",
+    "mailboxes": "Адреса",
+    "noMailboxes": "Нет",
+    "noMailboxesYet": "Сначала создайте адрес, затем назначьте его здесь.",
+    "status": "Статус",
+    "statusActive": "Активен",
+    "statusInactive": "Деактивирован",
+    "statusPendingPassword": "Требуется смена пароля",
+    "created": "Создан",
+    "actions": "Действия",
+    "assignMailboxes": "Назначить адреса",
+    "activate": "Активировать",
+    "activateDescription": "{email} снова сможет войти.",
+    "deactivate": "Деактивировать",
+    "deactivateDescription": "{email} будет разлогинен и не сможет войти.",
+    "delete": "Удалить",
+    "deleteTitle": "Удалить пользователя",
+    "deleteDescription": "{email} будет удалён вместе с сессиями и черновиками. Письма останутся в рабочей области.",
+    "temporaryPassword": "Временный пароль",
+    "temporaryPasswordHint": "Скопируйте сейчас: пароль хранится только в виде хеша и больше не будет показан.",
+    "userCreated": "Учётная запись для {email} создана.",
+    "create": "Создать",
+    "save": "Сохранить",
+    "cancel": "Отмена",
+    "done": "Готово"
+  },
+  "mailboxes": {
+    "title": "Адреса",
+    "description": "Адреса, с которых рабочая область отправляет и на которые получает письма.",
+    "addMailbox": "Добавить адрес",
+    "addMailboxDescription": "Используйте адрес домена, подтверждённого в Resend.",
+    "address": "Адрес",
+    "addressPlaceholder": "team@company.com",
+    "displayName": "Отображаемое имя",
+    "displayNamePlaceholder": "Служба поддержки",
+    "assignedUsers": "Пользователей",
+    "created": "Создан",
+    "actions": "Действия",
+    "rename": "Переименовать",
+    "delete": "Удалить",
+    "deleteTitle": "Удалить адрес",
+    "deleteDescription": "Письма по адресу {address} сохранятся, но потеряют привязку — их увидит только владелец.",
+    "empty": "Адресов пока нет. Добавьте первый, чтобы отправлять и получать письма.",
+    "create": "Создать",
+    "save": "Сохранить",
+    "cancel": "Отмена"
   }
 }

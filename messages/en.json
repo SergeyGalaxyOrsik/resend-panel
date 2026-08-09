@@ -38,7 +38,10 @@
     "statistics": "Statistics",
     "settings": "Settings",
     "conversation": "Conversation",
-    "logOut": "Log out"
+    "logOut": "Log out",
+    "users": "Users",
+    "mailboxes": "Mailboxes",
+    "administration": "Administration"
   },
   "auth": {
     "email": "Email",
@@ -49,7 +52,12 @@
     "signInDescription": "Enter your credentials to access your workspace.",
     "createAccount": "Create account",
     "createAccountDescription": "The first account becomes the workspace owner.",
-    "signInInstead": "Sign in instead"
+    "signInInstead": "Sign in instead",
+    "changePassword": "Change password",
+    "changePasswordDescription": "Pick a new password for your account.",
+    "changePasswordRequired": "Your account uses a temporary password. Choose a new one to continue.",
+    "currentPassword": "Current password",
+    "newPassword": "New password"
   },
   "dashboard": {
     "totalMessages": "Total messages",
@@ -118,7 +126,9 @@
     "sendMessage": "Send message",
     "sending": "Sending...",
     "preview": "Preview",
-    "previewDescription": "Sanitized HTML that will be sent via Resend."
+    "previewDescription": "Sanitized HTML that will be sent via Resend.",
+    "from": "From",
+    "noMailbox": "No mailbox is assigned to you yet. Ask the workspace owner to assign one before sending."
   },
   "drafts": {
     "title": "Drafts",
@@ -172,7 +182,8 @@
     "testConnection": "Test connection",
     "testing": "Testing...",
     "syncHistory": "Sync history",
-    "syncing": "Syncing..."
+    "syncing": "Syncing...",
+    "mailboxesHint": "Sending now happens from the mailboxes you manage under Mailboxes. The sender name below is only used as a fallback when a mailbox has no display name."
   },
   "language": {
     "label": "Language"
@@ -206,6 +217,82 @@
     "addRecipient": "Add at least one recipient.",
     "messageSent": "Message sent.",
     "settingsSaved": "Settings saved for {email}.",
-    "syncCompleted": "Imported {imported} new and updated {backfilled} existing messages from Resend ({sent} sent, {received} received in account)."
+    "syncCompleted": "Imported {imported} new and updated {backfilled} existing messages from Resend ({sent} sent, {received} received in account).",
+    "accountDeactivated": "This account has been deactivated.",
+    "currentPasswordInvalid": "Current password is incorrect.",
+    "passwordMustDiffer": "The new password must differ from the current one.",
+    "emailRequired": "Email is required.",
+    "emailAlreadyExists": "An account with this email already exists.",
+    "userNotFound": "User not found.",
+    "cannotModifyOwner": "The workspace owner cannot be modified.",
+    "userCreated": "Account created for {email}.",
+    "userDeleted": "{email} was deleted.",
+    "userActivated": "{email} was activated.",
+    "userDeactivated": "{email} was deactivated.",
+    "mailboxesAssigned": "Mailboxes updated for {email}.",
+    "mailboxAddressInvalid": "Enter a valid email address.",
+    "mailboxExists": "This address already exists in the workspace.",
+    "mailboxNotFound": "Mailbox not found.",
+    "mailboxNotAllowed": "You cannot send from this mailbox.",
+    "noMailboxAssigned": "No mailbox is assigned to you.",
+    "mailboxCreated": "Mailbox {address} created.",
+    "mailboxUpdated": "Mailbox {address} updated.",
+    "mailboxDeleted": "Mailbox {address} deleted."
+  },
+  "users": {
+    "title": "Users",
+    "description": "Create accounts and decide which mailboxes each person can use.",
+    "addUser": "Add user",
+    "addUserDescription": "The account is created with a temporary password shown once.",
+    "email": "Email",
+    "emailPlaceholder": "person@company.com",
+    "role": "Role",
+    "roleOwner": "Owner",
+    "roleMember": "Member",
+    "mailboxes": "Mailboxes",
+    "noMailboxes": "None",
+    "noMailboxesYet": "Create a mailbox first, then assign it here.",
+    "status": "Status",
+    "statusActive": "Active",
+    "statusInactive": "Deactivated",
+    "statusPendingPassword": "Password change pending",
+    "created": "Created",
+    "actions": "Actions",
+    "assignMailboxes": "Assign mailboxes",
+    "activate": "Activate",
+    "activateDescription": "{email} will be able to sign in again.",
+    "deactivate": "Deactivate",
+    "deactivateDescription": "{email} will be signed out and blocked from signing in.",
+    "delete": "Delete",
+    "deleteTitle": "Delete user",
+    "deleteDescription": "{email} will be removed along with their sessions and drafts. Their mail stays in the workspace.",
+    "temporaryPassword": "Temporary password",
+    "temporaryPasswordHint": "Copy it now: it is stored only as a hash and cannot be shown again.",
+    "userCreated": "Account created for {email}.",
+    "create": "Create",
+    "save": "Save",
+    "cancel": "Cancel",
+    "done": "Done"
+  },
+  "mailboxes": {
+    "title": "Mailboxes",
+    "description": "Addresses this workspace sends from and receives on.",
+    "addMailbox": "Add mailbox",
+    "addMailboxDescription": "Use an address your Resend domain is allowed to send from.",
+    "address": "Address",
+    "addressPlaceholder": "team@company.com",
+    "displayName": "Display name",
+    "displayNamePlaceholder": "Support team",
+    "assignedUsers": "Users",
+    "created": "Created",
+    "actions": "Actions",
+    "rename": "Rename",
+    "delete": "Delete",
+    "deleteTitle": "Delete mailbox",
+    "deleteDescription": "Mail sent to and from {address} is kept but loses its mailbox link, so only the owner will see it.",
+    "empty": "No mailboxes yet. Add one to start sending and receiving.",
+    "create": "Create",
+    "save": "Save",
+    "cancel": "Cancel"
   }
 }

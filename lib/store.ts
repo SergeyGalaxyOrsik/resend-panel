@@ -2,19 +2,46 @@ import { createToken } from "@/lib/crypto"
 import { supabase } from "@/lib/supabase"
 import type {
   Draft,
+  Mailbox,
+  MailboxScope,
+  ManagedUser,
   Message,
   MessageEvent,
   ResendSettings,
   Session,
   Thread,
   User,
+  UserRole,
   Workspace,
 } from "@/lib/types"
+
+/** Reads with no scope argument stay unrestricted, which keeps the owner paths unchanged. */
+const ALL_MAILBOXES: MailboxScope = { kind: "all" }
+
+/**
+ * The single place that decides which mailboxes a read may touch. Returns the id
+ * list to filter on, or `null` for unrestricted access. An empty list yields an
+ * empty result, and `mailbox_id is null` never matches `in(...)`, so mail with no
+ * mailbox link stays owner-only without a second condition.
+ */
+function mailboxFilter(scope: MailboxScope = ALL_MAILBOXES) {
+  return scope.kind === "all" ? null : scope.mailboxIds
+}
+
+function isInScope(mailboxId: string | undefined, scope: MailboxScope = ALL_MAILBOXES) {
+  const allowed = mailboxFilter(scope)
+  if (!allowed) return true
+  return Boolean(mailboxId) && allowed.includes(mailboxId as string)
+}
 
 // ── Bootstrap ──────────────────────────────────────────────
 
 export async function getBootstrapState() {
-  const { data: users } = await supabase.from("users").select("id, email, password_hash, created_at").limit(1)
+  const { data: users } = await supabase
+    .from("users")
+    .select("*")
+    .order("created_at", { ascending: true })
+    .limit(1)
   const { data: workspaces } = await supabase.from("workspaces").select("id, name, owner_user_id, created_at").limit(1)
 
   return {
@@ -39,11 +66,18 @@ export async function findUserById(userId: string) {
   return mapUser(data)
 }
 
-export async function createUser(email: string, passwordHash: string) {
+export async function createUser(
+  email: string,
+  passwordHash: string,
+  options?: { role?: UserRole; mustChangePassword?: boolean }
+) {
   const user: User = {
     id: createToken("user"),
     email,
     passwordHash,
+    role: options?.role ?? "member",
+    isActive: true,
+    mustChangePassword: options?.mustChangePassword ?? false,
     createdAt: new Date().toISOString(),
   }
 
@@ -51,11 +85,66 @@ export async function createUser(email: string, passwordHash: string) {
     id: user.id,
     email: user.email,
     password_hash: user.passwordHash,
+    role: user.role,
+    is_active: user.isActive,
+    must_change_password: user.mustChangePassword,
     created_at: user.createdAt,
   })
 
   if (error) throw new Error(error.message)
   return user
+}
+
+export async function listManagedUsers(): Promise<ManagedUser[]> {
+  const { data: users } = await supabase.from("users").select("*").order("created_at", { ascending: true })
+  const { data: links } = await supabase.from("mailbox_users").select("mailbox_id, user_id")
+  const { data: mailboxes } = await supabase.from("mailboxes").select("*")
+
+  const mailboxById = new Map((mailboxes || []).map((row) => [row.id as string, mapMailbox(row)]))
+  const mailboxesByUser = new Map<string, Mailbox[]>()
+
+  for (const link of links || []) {
+    const mailbox = mailboxById.get(link.mailbox_id as string)
+    if (!mailbox) continue
+    const list = mailboxesByUser.get(link.user_id as string) ?? []
+    list.push(mailbox)
+    mailboxesByUser.set(link.user_id as string, list)
+  }
+
+  return (users || []).map((row) => {
+    const user = mapUser(row)
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      isActive: user.isActive,
+      mustChangePassword: user.mustChangePassword,
+      createdAt: user.createdAt,
+      mailboxes: (mailboxesByUser.get(user.id) ?? []).sort((a, b) => a.address.localeCompare(b.address)),
+    }
+  })
+}
+
+export async function setUserActive(userId: string, isActive: boolean) {
+  const { error } = await supabase.from("users").update({ is_active: isActive }).eq("id", userId)
+  if (error) throw new Error(error.message)
+  if (!isActive) {
+    await deleteSessionsForUser(userId)
+  }
+}
+
+export async function updateUserPassword(userId: string, passwordHash: string, mustChangePassword: boolean) {
+  const { error } = await supabase
+    .from("users")
+    .update({ password_hash: passwordHash, must_change_password: mustChangePassword })
+    .eq("id", userId)
+
+  if (error) throw new Error(error.message)
+}
+
+export async function deleteUser(userId: string) {
+  const { error } = await supabase.from("users").delete().eq("id", userId)
+  if (error) throw new Error(error.message)
 }
 
 // ── Workspaces ─────────────────────────────────────────────
@@ -77,17 +166,25 @@ export async function createWorkspaceForOwner(owner: User, name?: string) {
 
   if (wsError) throw new Error(wsError.message)
 
+  const defaultFromName = "Resend Panel"
+  const defaultFromEmail = "onboarding@resend.dev"
+
   const { error: settingsError } = await supabase.from("resend_settings").insert({
     id: createToken("settings"),
     workspace_id: workspace.id,
     token_encrypted: "",
-    from_name: "Resend Panel",
-    from_email: "onboarding@resend.dev",
+    from_name: defaultFromName,
+    from_email: defaultFromEmail,
     inbound_email: `inbox@${workspace.id.slice(0, 8)}.local`,
     updated_at: new Date().toISOString(),
   })
 
   if (settingsError) throw new Error(settingsError.message)
+
+  // A new workspace ships with one mailbox owned by the owner, so composing works
+  // immediately, exactly as it did before mailboxes existed.
+  const mailbox = await createMailbox(workspace.id, defaultFromEmail, defaultFromName)
+  await setMailboxesForUser(owner.id, [mailbox.id])
 
   return workspace
 }
@@ -131,6 +228,114 @@ export async function revokeSession(sessionId: string) {
   await supabase.from("sessions").delete().eq("id", sessionId)
 }
 
+export async function deleteSessionsForUser(userId: string) {
+  await supabase.from("sessions").delete().eq("user_id", userId)
+}
+
+// ── Mailboxes ──────────────────────────────────────────────
+
+export async function listMailboxes(workspaceId: string) {
+  const { data } = await supabase
+    .from("mailboxes")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .order("address", { ascending: true })
+
+  return (data || []).map(mapMailbox)
+}
+
+export async function listMailboxesForUser(workspaceId: string, userId: string) {
+  const { data: links } = await supabase.from("mailbox_users").select("mailbox_id").eq("user_id", userId)
+  const mailboxIds = (links || []).map((row) => row.mailbox_id as string)
+  if (!mailboxIds.length) return []
+
+  const { data } = await supabase
+    .from("mailboxes")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .in("id", mailboxIds)
+    .order("address", { ascending: true })
+
+  return (data || []).map(mapMailbox)
+}
+
+export async function findMailboxById(workspaceId: string, mailboxId: string) {
+  const { data } = await supabase
+    .from("mailboxes")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("id", mailboxId)
+    .maybeSingle()
+
+  if (!data) return null
+  return mapMailbox(data)
+}
+
+export async function findMailboxByAddress(workspaceId: string, address: string) {
+  const { data } = await supabase
+    .from("mailboxes")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .ilike("address", address)
+    .maybeSingle()
+
+  if (!data) return null
+  return mapMailbox(data)
+}
+
+export async function createMailbox(workspaceId: string, address: string, displayName: string) {
+  const mailbox: Mailbox = {
+    id: createToken("mbx"),
+    workspaceId,
+    address,
+    displayName,
+    createdAt: new Date().toISOString(),
+  }
+
+  const { error } = await supabase.from("mailboxes").insert({
+    id: mailbox.id,
+    workspace_id: mailbox.workspaceId,
+    address: mailbox.address,
+    display_name: mailbox.displayName,
+    created_at: mailbox.createdAt,
+  })
+
+  if (error) throw new Error(error.message)
+  return mailbox
+}
+
+export async function updateMailbox(mailboxId: string, displayName: string) {
+  const { error } = await supabase.from("mailboxes").update({ display_name: displayName }).eq("id", mailboxId)
+  if (error) throw new Error(error.message)
+}
+
+/**
+ * Deleting a mailbox keeps its mail: the `on delete set null` foreign key drops the
+ * link, so those threads and messages fall back to being visible to the owner only.
+ */
+export async function deleteMailbox(mailboxId: string) {
+  const { error } = await supabase.from("mailboxes").delete().eq("id", mailboxId)
+  if (error) throw new Error(error.message)
+}
+
+export async function setMailboxesForUser(userId: string, mailboxIds: string[]) {
+  const { error: deleteError } = await supabase.from("mailbox_users").delete().eq("user_id", userId)
+  if (deleteError) throw new Error(deleteError.message)
+
+  if (!mailboxIds.length) return
+
+  const now = new Date().toISOString()
+  const { error } = await supabase.from("mailbox_users").insert(
+    mailboxIds.map((mailboxId) => ({
+      mailbox_id: mailboxId,
+      user_id: userId,
+      created_at: now,
+    }))
+  )
+
+  if (error) throw new Error(error.message)
+}
+
 // ── Settings ───────────────────────────────────────────────
 
 export async function getCurrentSettings() {
@@ -163,7 +368,7 @@ export async function ensureThread(
   workspaceId: string,
   subject: string,
   participants: string[],
-  options?: { messageAt?: string }
+  options?: { messageAt?: string; mailboxId?: string }
 ) {
   const normalizedSubject = subject.trim() || "No subject"
   const uniqueParticipants = Array.from(new Set(participants))
@@ -184,12 +389,15 @@ export async function ensureThread(
     const lastMessageAt =
       messageAt && new Date(messageAt).getTime() > new Date(existingLast).getTime() ? messageAt : existingLast
     const now = new Date().toISOString()
+    // A thread keeps the first mailbox it was linked to; only fill an empty link.
+    const mailboxId = (existing.mailbox_id as string | null) ?? options?.mailboxId ?? null
     await supabase
       .from("threads")
       .update({
         participants: mergedParticipants,
         updated_at: now,
         last_message_at: lastMessageAt,
+        mailbox_id: mailboxId,
       })
       .eq("id", existing.id)
 
@@ -198,6 +406,7 @@ export async function ensureThread(
       participants: mergedParticipants,
       updated_at: now,
       last_message_at: lastMessageAt,
+      mailbox_id: mailboxId,
     })
   }
 
@@ -205,6 +414,7 @@ export async function ensureThread(
   const thread: Thread = {
     id: createToken("thread"),
     workspaceId,
+    mailboxId: options?.mailboxId,
     subject: normalizedSubject,
     participants: uniqueParticipants,
     createdAt: initialAt,
@@ -215,6 +425,7 @@ export async function ensureThread(
   const { error } = await supabase.from("threads").insert({
     id: thread.id,
     workspace_id: thread.workspaceId,
+    mailbox_id: thread.mailboxId ?? null,
     subject: thread.subject,
     participants: thread.participants,
     created_at: thread.createdAt,
@@ -226,22 +437,29 @@ export async function ensureThread(
   return thread
 }
 
-export async function listThreads(workspaceId: string) {
-  const { data } = await supabase
-    .from("threads")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("last_message_at", { ascending: false })
+export async function listThreads(workspaceId: string, scope?: MailboxScope) {
+  let query = supabase.from("threads").select("*").eq("workspace_id", workspaceId)
+
+  const allowed = mailboxFilter(scope)
+  if (allowed) query = query.in("mailbox_id", allowed)
+
+  const { data } = await query.order("last_message_at", { ascending: false })
 
   return (data || []).map(mapThread)
 }
 
-export async function getThreadPreviews(workspaceId: string) {
-  const { data } = await supabase
+// Previews are scoped per message rather than per thread: a member never reads
+// preview text from a mailbox they do not own, even inside a thread they can open.
+export async function getThreadPreviews(workspaceId: string, scope?: MailboxScope) {
+  let query = supabase
     .from("messages")
     .select("thread_id, text, from_email")
     .eq("workspace_id", workspaceId)
-    .order("created_at", { ascending: false })
+
+  const allowed = mailboxFilter(scope)
+  if (allowed) query = query.in("mailbox_id", allowed)
+
+  const { data } = await query.order("created_at", { ascending: false })
 
   const previews: Record<string, { text: string; fromEmail: string }> = {}
 
@@ -294,7 +512,12 @@ export async function refreshThreadLastMessageAt(workspaceId: string, threadId: 
   await supabase.from("threads").update({ last_message_at: latest }).eq("id", threadId)
 }
 
-export async function getThreadWithMessages(workspaceId: string, threadId: string) {
+/**
+ * Access to a thread is decided by the thread's own mailbox link. Messages inside an
+ * accessible thread are returned in full, so a reply sent from another mailbox stays
+ * visible in the conversation it belongs to.
+ */
+export async function getThreadWithMessages(workspaceId: string, threadId: string, scope?: MailboxScope) {
   const { data: threadData } = await supabase
     .from("threads")
     .select("*")
@@ -303,6 +526,7 @@ export async function getThreadWithMessages(workspaceId: string, threadId: strin
     .maybeSingle()
 
   if (!threadData) return null
+  if (!isInScope((threadData.mailbox_id as string | null) ?? undefined, scope)) return null
 
   const { data: messagesData } = await supabase
     .from("messages")
@@ -339,6 +563,7 @@ export async function createMessage(
   const { error } = await supabase.from("messages").insert({
     id: message.id,
     workspace_id: message.workspaceId,
+    mailbox_id: message.mailboxId ?? null,
     thread_id: message.threadId,
     direction: message.direction,
     status: message.status,
@@ -387,7 +612,11 @@ export async function findMessageByProviderId(providerId: string) {
   return mapMessage(data)
 }
 
-export async function listMessages(workspaceId: string, direction?: Message["direction"]) {
+export async function listMessages(
+  workspaceId: string,
+  direction?: Message["direction"],
+  scope?: MailboxScope
+) {
   let query = supabase
     .from("messages")
     .select("*")
@@ -398,13 +627,16 @@ export async function listMessages(workspaceId: string, direction?: Message["dir
     query = query.eq("direction", direction)
   }
 
+  const allowed = mailboxFilter(scope)
+  if (allowed) query = query.in("mailbox_id", allowed)
+
   const { data } = await query
   const messages = (data || []).map(mapMessage)
 
   return messages.sort((a, b) => compareMessagesByTimestamp(a, b, "desc"))
 }
 
-export async function getMessage(workspaceId: string, messageId: string) {
+export async function getMessage(workspaceId: string, messageId: string, scope?: MailboxScope) {
   const { data } = await supabase
     .from("messages")
     .select("*")
@@ -413,7 +645,11 @@ export async function getMessage(workspaceId: string, messageId: string) {
     .maybeSingle()
 
   if (!data) return null
-  return mapMessage(data)
+
+  const message = mapMessage(data)
+  if (!isInScope(message.mailboxId, scope)) return null
+
+  return message
 }
 
 function compareMessagesByTimestamp(a: Message, b: Message, order: "asc" | "desc") {
@@ -474,6 +710,7 @@ export async function recordInboundReceipt(externalId: string, messageId: string
 
 export async function upsertDraft(
   workspaceId: string,
+  userId: string,
   draft: Pick<Draft, "subject" | "to" | "cc" | "bcc" | "text"> & { id?: string; threadId?: string }
 ) {
   if (draft.id) {
@@ -482,6 +719,7 @@ export async function upsertDraft(
       .select("*")
       .eq("id", draft.id)
       .eq("workspace_id", workspaceId)
+      .eq("user_id", userId)
       .maybeSingle()
 
     if (existing) {
@@ -515,6 +753,7 @@ export async function upsertDraft(
   const item: Draft = {
     id: createToken("draft"),
     workspaceId,
+    userId,
     threadId: draft.threadId,
     subject: draft.subject,
     to: draft.to,
@@ -527,6 +766,7 @@ export async function upsertDraft(
   const { error } = await supabase.from("drafts").insert({
     id: item.id,
     workspace_id: item.workspaceId,
+    user_id: item.userId,
     thread_id: item.threadId,
     subject: item.subject,
     to: item.to,
@@ -540,15 +780,17 @@ export async function upsertDraft(
   return item
 }
 
-export async function deleteDraft(draftId: string) {
-  await supabase.from("drafts").delete().eq("id", draftId)
+export async function deleteDraft(draftId: string, userId: string) {
+  await supabase.from("drafts").delete().eq("id", draftId).eq("user_id", userId)
 }
 
-export async function listDrafts(workspaceId: string) {
+// Drafts are private to the author, not shared across the workspace.
+export async function listDrafts(workspaceId: string, userId: string) {
   const { data } = await supabase
     .from("drafts")
     .select("*")
     .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
     .order("updated_at", { ascending: false })
 
   return (data || []).map(mapDraft)
@@ -556,22 +798,35 @@ export async function listDrafts(workspaceId: string) {
 
 // ── Stats ──────────────────────────────────────────────────
 
-export async function getStats(workspaceId: string) {
-  const { data: messages } = await supabase.from("messages").select("*").eq("workspace_id", workspaceId)
+export async function getStats(workspaceId: string, userId: string, scope?: MailboxScope) {
+  let messagesQuery = supabase.from("messages").select("*").eq("workspace_id", workspaceId)
 
-  const { data: events } = await supabase
+  const allowed = mailboxFilter(scope)
+  if (allowed) messagesQuery = messagesQuery.in("mailbox_id", allowed)
+
+  const { data: messages } = await messagesQuery
+  const allMessages = (messages || []).map(mapMessage)
+
+  let eventsQuery = supabase
     .from("message_events")
     .select("*")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: false })
     .limit(8)
 
-  const allMessages = (messages || []).map(mapMessage)
+  // Events carry no mailbox of their own, so restrict them to the messages in scope.
+  if (allowed) eventsQuery = eventsQuery.in("message_id", allMessages.map((message) => message.id))
+
+  const { data: events } = await eventsQuery
   const allEvents = (events || []).map(mapEvent)
 
   const countBy = (predicate: (m: Message) => boolean) => allMessages.filter(predicate).length
 
-  const { data: drafts } = await supabase.from("drafts").select("id").eq("workspace_id", workspaceId)
+  const { data: drafts } = await supabase
+    .from("drafts")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
 
   return {
     messages: allMessages.length,
@@ -653,6 +908,19 @@ function mapUser(row: Record<string, unknown>): User {
     id: row.id as string,
     email: row.email as string,
     passwordHash: row.password_hash as string,
+    role: (row.role as UserRole) ?? "member",
+    isActive: (row.is_active as boolean) ?? true,
+    mustChangePassword: (row.must_change_password as boolean) ?? false,
+    createdAt: row.created_at as string,
+  }
+}
+
+function mapMailbox(row: Record<string, unknown>): Mailbox {
+  return {
+    id: row.id as string,
+    workspaceId: row.workspace_id as string,
+    address: row.address as string,
+    displayName: (row.display_name as string) ?? "",
     createdAt: row.created_at as string,
   }
 }
@@ -691,6 +959,7 @@ function mapThread(row: Record<string, unknown>): Thread {
   return {
     id: row.id as string,
     workspaceId: row.workspace_id as string,
+    mailboxId: (row.mailbox_id as string | null) ?? undefined,
     subject: row.subject as string,
     participants: (row.participants as string[]) || [],
     createdAt: row.created_at as string,
@@ -703,6 +972,7 @@ function mapMessage(row: Record<string, unknown>): Message {
   return {
     id: row.id as string,
     workspaceId: row.workspace_id as string,
+    mailboxId: (row.mailbox_id as string | null) ?? undefined,
     threadId: row.thread_id as string,
     direction: row.direction as Message["direction"],
     status: row.status as Message["status"],
@@ -739,6 +1009,7 @@ function mapDraft(row: Record<string, unknown>): Draft {
   return {
     id: row.id as string,
     workspaceId: row.workspace_id as string,
+    userId: (row.user_id as string | null) ?? undefined,
     threadId: row.thread_id as string | undefined,
     subject: row.subject as string,
     to: row.to as string,

@@ -1,11 +1,11 @@
 import { getTranslations } from "next-intl/server"
-import { requireCurrentUser } from "@/lib/auth"
+import { requireOwner } from "@/lib/auth"
 import { getCurrentWorkspace, getCurrentSettings } from "@/lib/store"
 import { saveSettingsAction, syncResendHistoryAction, testResendConnectionAction } from "@/app/actions"
 import { SettingsForm } from "@/components/settings-form"
 
 export default async function SettingsPage() {
-  await requireCurrentUser()
+  await requireOwner()
   const workspace = await getCurrentWorkspace()
   if (!workspace) return null
 

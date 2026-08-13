@@ -1,10 +1,10 @@
+import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import type { ReactNode } from "react"
 import { getMailboxScope, requireCurrentUser } from "@/lib/auth"
-import { getCurrentWorkspace, listThreads } from "@/lib/store"
+import { getCurrentWorkspace, getFolderCounts } from "@/lib/store"
 import { logoutAction } from "@/app/actions"
-import { ResendAppShell } from "@/components/resend-app-shell"
-import { TooltipProvider } from "@/components/ui/tooltip"
+import { MailShell } from "@/components/mail/mail-shell"
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await requireCurrentUser()
@@ -15,18 +15,23 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   }
 
   const scope = await getMailboxScope(user, workspace.id)
-  const threads = await listThreads(workspace.id, scope)
+  const counts = await getFolderCounts(workspace.id, user.id, scope)
+
+  // The sidebar persists its own state in a cookie; reading it here means the rail
+  // renders in the right state on the server instead of snapping after hydration.
+  const cookieStore = await cookies()
+  const defaultSidebarOpen = cookieStore.get("sidebar_state")?.value !== "false"
 
   return (
-    <TooltipProvider>
-      <ResendAppShell
-        user={{ email: user.email, role: user.role }}
-        workspace={workspace}
-        threads={threads}
-        logoutAction={logoutAction}
-      >
-        {children}
-      </ResendAppShell>
-    </TooltipProvider>
+    <MailShell
+      email={user.email}
+      role={user.role}
+      workspace={workspace}
+      counts={counts}
+      defaultSidebarOpen={defaultSidebarOpen}
+      logoutAction={logoutAction}
+    >
+      {children}
+    </MailShell>
   )
 }

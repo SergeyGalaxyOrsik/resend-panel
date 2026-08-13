@@ -8,16 +8,16 @@ const MAX_TOTAL_SIZE = 25 * 1024 * 1024 // 25MB
 
 export { MAX_FILE_SIZE, MAX_TOTAL_SIZE }
 
-function mapAttachment(row: any): Attachment {
+function mapAttachment(row: Record<string, unknown>): Attachment {
   return {
-    id: row.id,
-    messageId: row.message_id,
-    workspaceId: row.workspace_id,
-    filename: row.filename,
-    contentType: row.content_type,
-    size: row.size,
-    storagePath: row.storage_path,
-    createdAt: row.created_at,
+    id: row.id as string,
+    messageId: (row.message_id as string | null) ?? null,
+    workspaceId: row.workspace_id as string,
+    filename: row.filename as string,
+    contentType: (row.content_type as string) ?? "",
+    size: (row.size as number) ?? 0,
+    storagePath: row.storage_path as string,
+    createdAt: row.created_at as string,
   }
 }
 

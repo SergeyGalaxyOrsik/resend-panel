@@ -1,21 +1,18 @@
 "use client"
 
-import { useActionState, useMemo, useState } from "react"
+import { useActionState, useState, type ReactNode } from "react"
 import { useTranslations } from "next-intl"
+import { PaperclipIcon, SendHorizontalIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import type { AuthState, Mailbox } from "@/lib/types"
-import { cn } from "@/lib/utils"
 import { FileAttachments } from "@/components/file-attachments"
 
 type Action = (prevState: AuthState, formData: FormData) => Promise<AuthState>
 
 type EmailComposerProps = {
-  title: string
-  description: string
   action: Action
   initialTo?: string
   initialCc?: string
@@ -25,39 +22,18 @@ type EmailComposerProps = {
   threadId?: string
   draftId?: string
   replyToMessageId?: string
-  hideRecipients?: boolean
-  compact?: boolean
   mailboxes?: Mailbox[]
   defaultMailboxId?: string
 }
 
 const initialState: AuthState = {}
 
-function escapeHtml(input: string) {
-  return input
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;")
-}
-
-function renderPreview(text: string, placeholder: string) {
-  const escaped = escapeHtml(text.trim() || placeholder)
-  const linked = escaped.replace(
-    /(https?:\/\/[^\s<]+)/g,
-    (url) => `<a href="${url}" target="_blank" rel="noreferrer noopener" class="text-primary underline">${url}</a>`
-  )
-
-  return linked
-    .split(/\n{2,}/)
-    .map((paragraph) => `<p>${paragraph.replace(/\n/g, "<br />")}</p>`)
-    .join("")
-}
-
+/**
+ * One column, one card, in the order a message is actually written: who it is from,
+ * who it goes to, what it says. Cc and Bcc stay folded away until asked for, the way
+ * they are in every mail client, because most messages never use them.
+ */
 export function EmailComposer({
-  title,
-  description,
   action,
   initialTo = "",
   initialCc = "",
@@ -67,149 +43,197 @@ export function EmailComposer({
   threadId,
   draftId,
   replyToMessageId,
-  hideRecipients = false,
-  compact = false,
   mailboxes = [],
   defaultMailboxId = "",
 }: EmailComposerProps) {
   const [state, formAction, pending] = useActionState(action, initialState)
   const [text, setText] = useState(initialText)
-  const [attachedFiles, setAttachedFiles] = useState<Array<{
-    id: string
-    filename: string
-    contentType: string
-    size: number
-    storagePath: string
-  }>>([])
+  const [showCopies, setShowCopies] = useState(Boolean(initialCc || initialBcc))
+  const [attachedFiles, setAttachedFiles] = useState<
+    Array<{ id: string; filename: string; contentType: string; size: number; storagePath: string }>
+  >([])
   const t = useTranslations("compose")
-  const previewHtml = useMemo(() => renderPreview(text, t("previewPlaceholder")), [text, t])
   const hasMailboxes = mailboxes.length > 0
 
   return (
-    <div className={cn("grid gap-6", compact ? "lg:grid-cols-[1.2fr_0.8fr]" : "xl:grid-cols-[1.3fr_0.7fr]")}>
-      <Card className="border-border/80">
-        <CardHeader className="space-y-2">
-          <CardTitle className="text-2xl">{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {state.error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {state.error}
-            </div>
-          ) : null}
-          {state.success ? (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-              {state.success}
-            </div>
-          ) : null}
+    <form action={formAction} className="overflow-hidden rounded-xl border bg-card">
+      {threadId ? <input type="hidden" name="threadId" value={threadId} /> : null}
+      {draftId ? <input type="hidden" name="draftId" value={draftId} /> : null}
+      {replyToMessageId ? (
+        <input type="hidden" name="replyToMessageId" value={replyToMessageId} />
+      ) : null}
+      {attachedFiles.map((file) => (
+        <input key={file.id} type="hidden" name="attachmentIds" value={file.id} />
+      ))}
 
-          <form action={formAction} className="space-y-4">
-            {threadId ? <input type="hidden" name="threadId" value={threadId} /> : null}
-            {draftId ? <input type="hidden" name="draftId" value={draftId} /> : null}
-            {replyToMessageId ? <input type="hidden" name="replyToMessageId" value={replyToMessageId} /> : null}
-            {attachedFiles.map((file) => (
-              <input key={file.id} type="hidden" name="attachmentIds" value={file.id} />
-            ))}
+      {state.error ? (
+        <p className="border-b border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive-foreground">
+          {state.error}
+        </p>
+      ) : null}
+      {state.success ? (
+        <p className="border-b bg-muted px-4 py-3 text-sm">{state.success}</p>
+      ) : null}
 
-            <div className="grid gap-4 md:grid-cols-2">
-              {mailboxes.length > 1 ? (
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="mailboxId">{t("from")}</Label>
-                  <select
-                    id="mailboxId"
-                    name="mailboxId"
-                    defaultValue={defaultMailboxId || mailboxes[0].id}
-                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {mailboxes.map((mailbox) => (
-                      <option key={mailbox.id} value={mailbox.id}>
-                        {mailbox.displayName ? `${mailbox.displayName} <${mailbox.address}>` : mailbox.address}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : mailboxes.length === 1 ? (
-                <input type="hidden" name="mailboxId" value={mailboxes[0].id} />
-              ) : null}
+      <div className="divide-y">
+        {mailboxes.length > 1 ? (
+          <FieldRow htmlFor="mailboxId" label={t("from")}>
+            <select
+              id="mailboxId"
+              name="mailboxId"
+              defaultValue={defaultMailboxId || mailboxes[0].id}
+              className="h-8 w-full min-w-0 rounded-md bg-transparent text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              {mailboxes.map((mailbox) => (
+                <option key={mailbox.id} value={mailbox.id}>
+                  {mailbox.displayName
+                    ? `${mailbox.displayName} <${mailbox.address}>`
+                    : mailbox.address}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
+        ) : mailboxes.length === 1 ? (
+          <>
+            <input type="hidden" name="mailboxId" value={mailboxes[0].id} />
+            <FieldRow label={t("from")}>
+              <span className="truncate text-sm text-muted-foreground">
+                {mailboxes[0].displayName
+                  ? `${mailboxes[0].displayName} <${mailboxes[0].address}>`
+                  : mailboxes[0].address}
+              </span>
+            </FieldRow>
+          </>
+        ) : null}
 
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="subject">{t("subject")}</Label>
-                <Input id="subject" name="subject" defaultValue={initialSubject} placeholder={t("subjectPlaceholder")} required />
-              </div>
-
-              {!hideRecipients ? (
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="to">{t("to")}</Label>
-                  <Input id="to" name="to" defaultValue={initialTo} placeholder={t("toPlaceholder")} required />
-                </div>
-              ) : (
-                <input type="hidden" name="to" value={initialTo} />
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="cc">{t("cc")}</Label>
-                <Input id="cc" name="cc" defaultValue={initialCc} placeholder={t("ccPlaceholder")} />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="bcc">{t("bcc")}</Label>
-                <Input id="bcc" name="bcc" defaultValue={initialBcc} placeholder={t("bccPlaceholder")} />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="text">{t("message")}</Label>
-                <span className="text-xs text-muted-foreground">{t("livePreviewHint")}</span>
-              </div>
-              <Textarea
-                id="text"
-                name="text"
-                value={text}
-                onChange={(event) => setText(event.target.value)}
-                placeholder={t("messagePlaceholder")}
-                className="min-h-[300px]"
-                required
-              />
-            </div>
-
-            <FileAttachments
-              files={attachedFiles}
-              onFilesChange={setAttachedFiles}
-              disabled={pending}
-            />
-
-            {!hasMailboxes ? (
-              <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                {t("noMailbox")}
-              </p>
-            ) : null}
-
-            <div className="flex flex-wrap gap-3">
-              <Button type="submit" name="intent" value="save" variant="outline">
-                {t("saveDraft")}
+        <FieldRow
+          htmlFor="to"
+          label={t("to")}
+          action={
+            !showCopies ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="text-muted-foreground"
+                onClick={() => setShowCopies(true)}
+              >
+                {t("addCopies")}
               </Button>
-              <Button type="submit" name="intent" value="send" disabled={pending || !hasMailboxes}>
-                {pending ? t("sending") : t("sendMessage")}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card className="border-border/80 bg-muted/30">
-        <CardHeader className="space-y-2">
-          <CardTitle className="text-2xl">{t("preview")}</CardTitle>
-          <CardDescription>{t("previewDescription")}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div
-            className="prose prose-sm max-w-none rounded-xl border bg-background p-6 text-sm leading-7"
-            dangerouslySetInnerHTML={{ __html: previewHtml }}
+            ) : null
+          }
+        >
+          <Input
+            id="to"
+            name="to"
+            unstyled
+            defaultValue={initialTo}
+            placeholder={t("toPlaceholder")}
+            className="h-8 text-sm"
+            required
           />
-        </CardContent>
-      </Card>
+        </FieldRow>
+
+        {showCopies ? (
+          <>
+            <FieldRow htmlFor="cc" label={t("cc")}>
+              <Input
+                id="cc"
+                name="cc"
+                unstyled
+                defaultValue={initialCc}
+                placeholder={t("ccPlaceholder")}
+                className="h-8 text-sm"
+              />
+            </FieldRow>
+            <FieldRow htmlFor="bcc" label={t("bcc")}>
+              <Input
+                id="bcc"
+                name="bcc"
+                unstyled
+                defaultValue={initialBcc}
+                placeholder={t("bccPlaceholder")}
+                className="h-8 text-sm"
+              />
+            </FieldRow>
+          </>
+        ) : null}
+
+        <FieldRow htmlFor="subject" label={t("subject")}>
+          <Input
+            id="subject"
+            name="subject"
+            unstyled
+            defaultValue={initialSubject}
+            placeholder={t("subjectPlaceholder")}
+            className="h-8 text-sm"
+            required
+          />
+        </FieldRow>
+      </div>
+
+      <div className="border-t">
+        <Label htmlFor="text" className="sr-only">
+          {t("message")}
+        </Label>
+        <Textarea
+          id="text"
+          name="text"
+          unstyled
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          placeholder={t("messagePlaceholder")}
+          className="block w-full [&_textarea]:min-h-72 [&_textarea]:px-4 [&_textarea]:py-3 [&_textarea]:text-sm [&_textarea]:leading-6"
+          required
+        />
+      </div>
+
+      <div className="border-t px-4 py-3">
+        <FileAttachments files={attachedFiles} onFilesChange={setAttachedFiles} disabled={pending} />
+      </div>
+
+      {!hasMailboxes ? (
+        <p className="border-t bg-muted px-4 py-3 text-sm text-muted-foreground">{t("noMailbox")}</p>
+      ) : null}
+
+      <div className="flex flex-wrap items-center gap-2 border-t bg-muted/40 px-4 py-3">
+        <Button type="submit" name="intent" value="send" loading={pending} disabled={!hasMailboxes}>
+          <SendHorizontalIcon />
+          {pending ? t("sending") : t("sendMessage")}
+        </Button>
+        <Button type="submit" name="intent" value="save" variant="ghost" disabled={pending}>
+          {t("saveDraft")}
+        </Button>
+        <span className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+          <PaperclipIcon className="size-3.5" />
+          {t("attachmentHint")}
+        </span>
+      </div>
+    </form>
+  )
+}
+
+function FieldRow({
+  htmlFor,
+  label,
+  action,
+  children,
+}: {
+  htmlFor?: string
+  label: string
+  action?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <div className="flex items-center gap-3 px-4">
+      <Label
+        htmlFor={htmlFor}
+        className="w-16 shrink-0 py-2 text-xs font-medium text-muted-foreground"
+      >
+        {label}
+      </Label>
+      <div className="min-w-0 flex-1 py-1">{children}</div>
+      {action}
     </div>
   )
 }

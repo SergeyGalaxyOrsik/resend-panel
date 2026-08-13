@@ -1,6 +1,8 @@
 import { requireOwner } from "@/lib/auth"
 import { getCurrentWorkspace, listMailboxes, listManagedUsers } from "@/lib/store"
 import { createMailboxAction, deleteMailboxAction, updateMailboxAction } from "@/app/actions"
+import { getTranslations } from "next-intl/server"
+import { ContentPage } from "@/components/mail/content-page"
 import { MailboxesManager } from "@/components/mailboxes-manager"
 import { formatDate, getFormatLocale } from "@/lib/format"
 
@@ -9,6 +11,7 @@ export default async function MailboxesPage() {
   const workspace = await getCurrentWorkspace()
   if (!workspace) return null
 
+  const t = await getTranslations("mailboxes")
   const locale = await getFormatLocale()
   const mailboxes = await listMailboxes(workspace.id)
   const users = await listManagedUsers()
@@ -25,13 +28,15 @@ export default async function MailboxesPage() {
   )
 
   return (
-    <MailboxesManager
-      mailboxes={mailboxes}
-      assignedCounts={assignedCounts}
-      createdLabels={createdLabels}
-      createAction={createMailboxAction}
-      updateAction={updateMailboxAction}
-      deleteAction={deleteMailboxAction}
-    />
+    <ContentPage title={t("title")} description={t("description")}>
+      <MailboxesManager
+        mailboxes={mailboxes}
+        assignedCounts={assignedCounts}
+        createdLabels={createdLabels}
+        createAction={createMailboxAction}
+        updateAction={updateMailboxAction}
+        deleteAction={deleteMailboxAction}
+      />
+    </ContentPage>
   )
 }

@@ -1,20 +1,43 @@
 # Resend Panel
 
-Self-hosted email management panel powered by [Resend](https://resend.com). Single-tenant workspace with auth, inbox, compose, reply, drafts, and delivery statistics.
+Self-hosted email management panel powered by [Resend](https://resend.com). A Gmail-style
+mail client over your Resend account: folders, read state, stars, archive and trash,
+bulk actions, keyboard shortcuts and a sandboxed message reader.
 
 ## Features
 
 - **Auth bootstrap** — first user becomes workspace owner, registration closes automatically
-- **Inbox & threads** — receive inbound emails via Resend webhook, threaded conversation view
-- **Compose & reply** — send emails through Resend API, reply within threads with live preview
-- **Drafts** — save and resume drafts
+- **Folders** — Inbox, Starred, Sent, Drafts, Archive, Trash, with unread counts in the rail
+- **Conversation list** — unread rows in bold, per-row star, hover actions, multi-select with a
+  bulk toolbar, and Gmail's keyboard shortcuts (`j`/`k`, `x`, `s`, `e`, `#`, `⇧I`, `⇧U`, `/`)
+- **Reader** — collapsed thread history, attachments, and an inline reply that sends
+- **Sandboxed message rendering** — inbound HTML runs in a scriptless iframe, so a message can
+  neither execute JavaScript nor leak its CSS into the panel
+- **Global search** — one search box across every folder, with results at a shareable URL
+- **Compose & drafts** — send through the Resend API, save and resume drafts
 - **Delivery stats** — sent, delivered, opened, clicked, failed metrics
 - **Settings** — encrypted Resend API token storage, connection test, sender identity config
+- **Light and dark themes** — follows the system by default
+
+### Keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Move down / up the list |
+| `Enter` or `o` | Open the conversation under the cursor |
+| `x` | Select / deselect |
+| `s` | Star / unstar |
+| `e` | Archive (or move back to Inbox from Archive) |
+| `#` or `Delete` | Move to trash (delete forever when already in Trash) |
+| `⇧I` / `⇧U` | Mark read / unread |
+| `/` | Focus search |
+| `Esc` | Clear the selection |
+| `⌘B` / `Ctrl+B` | Collapse the folder rail |
 
 ## Tech Stack
 
 - [Next.js 16](https://nextjs.org) (App Router, React 19)
-- [shadcn/ui](https://ui.shadcn.com) sidebar-09 + Tailwind CSS 4
+- [shadcn/ui](https://ui.shadcn.com) (`b0` preset theme) + Tailwind CSS 4 + next-themes
 - [Supabase](https://supabase.com) Postgres (hosted)
 - AES-256-GCM encryption for secrets
 
@@ -96,16 +119,24 @@ For production, point Resend webhooks at your public host, e.g. `https://your-do
 
 ```
 app/
-├── (auth)/              # Login, register
-├── (app)/               # Protected routes (sidebar-09 shell)
-│   ├── dashboard/
-│   ├── inbox/[threadId]/
-│   ├── sent/, compose/, drafts/, statistics/, settings/
-├── api/inbound/         # Inbound email webhook
-├── api/events/          # Delivery/open/click events
+├── (auth)/                 # Login, register, forced password change
+├── (app)/                  # Protected routes, inside the mail shell
+│   ├── inbox/ starred/ archive/ trash/ sent/   # folder lists
+│   ├── search/             # results for the global search box
+│   ├── thread/[threadId]/  # the one reader, ?from= decides where "back" goes
+│   ├── drafts/, compose/, dashboard/, statistics/
+│   └── settings/, users/, mailboxes/           # owner only
+├── mail-actions.ts         # star / archive / trash / read mutations
+├── api/inbound/            # Inbound email webhook
+├── api/events/             # Delivery/open/click events
+components/
+├── mail/                   # shell, sidebar, list, reader, search
+├── email-body.tsx          # sandboxed iframe renderer for message HTML
 lib/
-├── store.ts             # Supabase data layer
-├── supabase.ts          # Supabase client
+├── store.ts                # Supabase data layer, folder queries and mutations
+├── mail.ts                 # avatars, initials, list date formatting
+├── email-html.ts           # message sanitizer and preview text
+└── supabase.ts             # Supabase client
 scripts/
 ├── migrate-json-to-supabase.ts
 └── repair-workspace.ts

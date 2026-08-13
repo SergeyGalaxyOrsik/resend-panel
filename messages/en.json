@@ -7,40 +7,49 @@
     "appName": "Resend Panel",
     "workspace": "Workspace",
     "pleaseWait": "Please wait...",
-    "unknown": "unknown",
     "noSubject": "No subject",
     "noRecipients": "No recipients"
   },
   "mail": {
-    "sortNewest": "Newest first",
-    "sortOldest": "Oldest first",
     "sentAt": "Sent",
     "receivedAt": "Received",
-    "lastActivity": "Last activity",
-    "noMessages": "No messages.",
-    "searchPlaceholder": "Search by subject or email",
-    "noSearchResults": "No messages match your search.",
-    "columnSubject": "Subject",
-    "columnFrom": "From",
+    "searchPlaceholder": "Search mail",
     "columnTo": "To",
-    "columnParticipants": "Participants",
-    "columnStatus": "Status",
-    "columnActions": "Actions",
-    "viewDetails": "View details"
+    "searchLabel": "Search mail",
+    "clearSearch": "Clear search",
+    "selectAll": "Select all conversations",
+    "selectRow": "Select “{subject}”",
+    "selectedCount": "{count, plural, one {# selected} other {# selected}}",
+    "threadTotal": "{count, plural, one {# conversation} other {# conversations}}",
+    "messageTotal": "{count, plural, one {# message} other {# messages}}",
+    "star": "Star",
+    "unstar": "Remove star",
+    "archive": "Archive",
+    "moveToInbox": "Move to inbox",
+    "delete": "Delete",
+    "deleteForever": "Delete forever",
+    "restore": "Restore",
+    "markRead": "Mark as read",
+    "markUnread": "Mark as unread",
+    "hasAttachments": "Has attachments",
+    "reply": "Reply",
+    "openInComposer": "Open in composer",
+    "replyingTo": "Replying to {recipient}",
+    "backTo": "Back to {folder}",
+    "backToResults": "Back to results",
+    "draftBadge": "Draft",
+    "draftTotal": "{count, plural, one {# draft} other {# drafts}}"
   },
   "nav": {
-    "mail": "Mail",
     "dashboard": "Dashboard",
-    "inbox": "Inbox",
-    "sent": "Sent",
     "compose": "Compose",
-    "drafts": "Drafts",
     "statistics": "Statistics",
     "settings": "Settings",
-    "conversation": "Conversation",
     "logOut": "Log out",
     "users": "Users",
     "mailboxes": "Mailboxes",
+    "insights": "Insights",
+    "changePassword": "Change password",
     "administration": "Administration"
   },
   "auth": {
@@ -70,38 +79,7 @@
     "failed": "Failed",
     "recentActivity": "Recent activity",
     "noRecentEvents": "No recent events.",
-    "composeTitle": "Compose a message",
-    "composeDescription": "Send your first email through Resend Panel.",
     "newMessage": "New message"
-  },
-  "inbox": {
-    "title": "Inbox",
-    "threadCount": "{count, plural, one {# thread} other {# threads}}",
-    "newMessage": "New message",
-    "emptyTitle": "No conversations yet",
-    "emptyDescription": "Send an email or configure inbound webhooks to receive messages.",
-    "participants": "{count, plural, one {# participant} other {# participants}}",
-    "reply": "Reply",
-    "selectThreadTitle": "Select a conversation",
-    "selectThreadDescription": "Choose a thread from the list to read messages.",
-    "backToInbox": "Back to inbox",
-    "forward": "Forward",
-    "archive": "Archive",
-    "delete": "Delete",
-    "more": "More",
-    "replyPlaceholder": "Reply…"
-  },
-  "sent": {
-    "title": "Sent messages",
-    "messageCount": "{count, plural, one {# sent message} other {# sent messages}}",
-    "emptyTitle": "No sent messages",
-    "emptyDescription": "Compose your first email to see it here.",
-    "noMessages": "No messages.",
-    "compose": "Compose",
-    "selectMessageTitle": "Select a message",
-    "selectMessageDescription": "Choose a sent message from the list to view details.",
-    "backToSent": "Back to sent",
-    "viewThread": "View thread"
   },
   "compose": {
     "newMessage": "New message",
@@ -119,23 +97,15 @@
     "bcc": "BCC",
     "bccPlaceholder": "bcc@company.com",
     "message": "Message",
-    "livePreviewHint": "Live preview updates as you type",
     "messagePlaceholder": "Write your email here...",
-    "previewPlaceholder": "Your message preview will appear here.",
     "saveDraft": "Save draft",
     "sendMessage": "Send message",
     "sending": "Sending...",
-    "preview": "Preview",
-    "previewDescription": "Sanitized HTML that will be sent via Resend.",
     "from": "From",
-    "noMailbox": "No mailbox is assigned to you yet. Ask the workspace owner to assign one before sending."
-  },
-  "drafts": {
-    "title": "Drafts",
-    "draftCount": "{count, plural, one {# draft} other {# drafts}}",
-    "emptyTitle": "No drafts",
-    "emptyDescription": "Start composing a message to create a draft.",
-    "badge": "Draft"
+    "noMailbox": "No mailbox is assigned to you yet. Ask the workspace owner to assign one before sending.",
+    "addCopies": "Cc / Bcc",
+    "discard": "Discard",
+    "attachmentHint": "Up to 10 MB per file"
   },
   "statistics": {
     "title": "Email statistics",
@@ -191,11 +161,6 @@
   "direction": {
     "inbound": "inbound",
     "outbound": "outbound"
-  },
-  "time": {
-    "minutesAgo": "{count}m ago",
-    "hoursAgo": "{count}h ago",
-    "daysAgo": "{count}d ago"
   },
   "errors": {
     "registrationClosed": "Registration is closed after the first account is created.",
@@ -294,5 +259,36 @@
     "create": "Create",
     "save": "Save",
     "cancel": "Cancel"
+  },
+  "folders": {
+    "inbox": "Inbox",
+    "starred": "Starred",
+    "sent": "Sent",
+    "drafts": "Drafts",
+    "archive": "Archive",
+    "trash": "Trash"
+  },
+  "theme": {
+    "label": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "empty": {
+    "searchTitle": "Results for “{query}”",
+    "inboxTitle": "Your inbox is empty",
+    "inboxDescription": "New mail arriving at your mailboxes will show up here.",
+    "starredTitle": "Nothing starred",
+    "starredDescription": "Star a conversation to keep it within reach.",
+    "archiveTitle": "Nothing archived",
+    "archiveDescription": "Archived conversations leave the inbox but are never deleted.",
+    "trashTitle": "Trash is empty",
+    "trashDescription": "Deleted conversations wait here until you remove them for good.",
+    "sentTitle": "Nothing sent yet",
+    "sentDescription": "Messages you send appear here.",
+    "draftsTitle": "No drafts",
+    "draftsDescription": "Start a message and save it to keep a draft here.",
+    "searchNoResultsTitle": "No matches",
+    "searchDescription": "Try a different name, address or subject."
   }
 }

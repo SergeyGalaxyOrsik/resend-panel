@@ -289,6 +289,8 @@ export async function syncResendHistory(token: string) {
       bcc: (item.bcc ?? []).map(String),
       text,
       html,
+      // Backfilled history is not new mail: importing it must not light up the inbox.
+      isRead: true,
       providerId: item.id,
       receivedAt: occurredAt,
       createdAt: occurredAt,

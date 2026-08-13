@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 
 type StatCardProps = {
   label: string
@@ -8,17 +8,16 @@ type StatCardProps = {
 
 export function StatCards({ stats }: { stats: StatCardProps[] }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {stats.map((stat) => (
-        <Card key={stat.label} className="border-border/80 bg-white/90">
-          <CardHeader>
-            <CardDescription>{stat.label}</CardDescription>
-            <CardTitle className="text-3xl">{stat.value}</CardTitle>
-          </CardHeader>
-          {stat.description ? <CardContent className="pt-0 text-sm text-muted-foreground">{stat.description}</CardContent> : null}
+        <Card key={stat.label} className="rounded-xl p-4">
+          <p className="text-xs text-muted-foreground">{stat.label}</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{stat.value}</p>
+          {/* Held whether or not there is a caption, so a row of cards keeps one
+              baseline instead of going ragged where a rate is missing. */}
+          <p className="mt-1 min-h-4 text-xs text-muted-foreground">{stat.description ?? ""}</p>
         </Card>
       ))}
     </div>
   )
 }
-

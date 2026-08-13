@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server"
 import { requireCurrentUser } from "@/lib/auth"
 import { getCurrentWorkspace, listDrafts, listMailboxes, listMailboxesForUser } from "@/lib/store"
 import { composeAction } from "@/app/actions"
+import { ContentPage } from "@/components/mail/content-page"
 import { EmailComposer } from "@/components/email-composer"
 
 type Props = {
@@ -17,7 +18,7 @@ export default async function EditDraftPage({ params }: Props) {
 
   const t = await getTranslations("compose")
   const drafts = await listDrafts(workspace.id, user.id)
-  const draft = drafts.find((d) => d.id === draftId)
+  const draft = drafts.find((item) => item.id === draftId)
   if (!draft) notFound()
 
   const mailboxes =
@@ -26,19 +27,19 @@ export default async function EditDraftPage({ params }: Props) {
       : await listMailboxesForUser(workspace.id, user.id)
 
   return (
-    <EmailComposer
-      title={t("editDraft")}
-      description={t("editDraftDescription")}
-      action={composeAction}
-      initialTo={draft.to}
-      initialCc={draft.cc}
-      initialBcc={draft.bcc}
-      initialSubject={draft.subject}
-      initialText={draft.text}
-      threadId={draft.threadId}
-      draftId={draft.id}
-      mailboxes={mailboxes}
-      defaultMailboxId={mailboxes[0]?.id ?? ""}
-    />
+    <ContentPage title={t("editDraft")} description={t("editDraftDescription")}>
+      <EmailComposer
+        action={composeAction}
+        initialTo={draft.to}
+        initialCc={draft.cc}
+        initialBcc={draft.bcc}
+        initialSubject={draft.subject}
+        initialText={draft.text}
+        threadId={draft.threadId}
+        draftId={draft.id}
+        mailboxes={mailboxes}
+        defaultMailboxId={mailboxes[0]?.id ?? ""}
+      />
+    </ContentPage>
   )
 }

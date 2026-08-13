@@ -534,7 +534,7 @@ export async function inboundWebhookAction(requestBody: unknown) {
     workspace.id,
     payload.subject,
     Array.from(new Set([payload.from, ...payload.to])),
-    { messageAt: receivedAt, mailboxId: mailbox?.id }
+    { messageAt: receivedAt, mailboxId: mailbox?.id, reactivate: true }
   )
 
   // Fetch email content from Resend API if html/text are missing (webhook doesn't include body)
@@ -588,6 +588,8 @@ export async function inboundWebhookAction(requestBody: unknown) {
 
   revalidatePath("/dashboard")
   revalidatePath("/inbox")
+  revalidatePath("/starred")
+  revalidatePath("/archive")
   revalidatePath("/statistics")
 
   return { received: true, messageId: message.id }

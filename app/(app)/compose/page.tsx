@@ -8,6 +8,7 @@ import {
 } from "@/lib/store"
 import { getReplyRecipients, renderThreadSubject } from "@/lib/email"
 import { composeAction } from "@/app/actions"
+import { ContentPage } from "@/components/mail/content-page"
 import { EmailComposer } from "@/components/email-composer"
 
 type Props = {
@@ -55,16 +56,16 @@ export default async function ComposePage({ searchParams }: Props) {
   }
 
   return (
-    <EmailComposer
-      title={title}
-      description={description}
-      action={composeAction}
-      initialTo={initialTo}
-      initialSubject={initialSubject}
-      threadId={threadId}
-      replyToMessageId={replyToMessageId}
-      mailboxes={mailboxes}
-      defaultMailboxId={defaultMailboxId}
-    />
+    <ContentPage title={title} description={description}>
+      <EmailComposer
+        action={composeAction}
+        initialTo={initialTo}
+        initialSubject={initialSubject}
+        threadId={threadId}
+        replyToMessageId={replyToMessageId}
+        mailboxes={mailboxes}
+        defaultMailboxId={defaultMailboxId}
+      />
+    </ContentPage>
   )
 }

@@ -7,40 +7,49 @@
     "appName": "Resend Panel",
     "workspace": "Рабочая область",
     "pleaseWait": "Подождите...",
-    "unknown": "неизвестно",
     "noSubject": "Без темы",
     "noRecipients": "Нет получателей"
   },
   "mail": {
-    "sortNewest": "Сначала новые",
-    "sortOldest": "Сначала старые",
     "sentAt": "Отправлено",
     "receivedAt": "Получено",
-    "lastActivity": "Последняя активность",
-    "noMessages": "Нет сообщений.",
-    "searchPlaceholder": "Поиск по теме или email",
-    "noSearchResults": "Ничего не найдено.",
-    "columnSubject": "Тема",
-    "columnFrom": "От",
+    "searchPlaceholder": "Поиск в почте",
     "columnTo": "Кому",
-    "columnParticipants": "Участники",
-    "columnStatus": "Статус",
-    "columnActions": "Действия",
-    "viewDetails": "Открыть"
+    "searchLabel": "Поиск в почте",
+    "clearSearch": "Очистить поиск",
+    "selectAll": "Выбрать все переписки",
+    "selectRow": "Выбрать «{subject}»",
+    "selectedCount": "{count, plural, one {Выбрана #} few {Выбрано #} other {Выбрано #}}",
+    "threadTotal": "{count, plural, one {# переписка} few {# переписки} other {# переписок}}",
+    "messageTotal": "{count, plural, one {# письмо} few {# письма} other {# писем}}",
+    "star": "Отметить",
+    "unstar": "Снять отметку",
+    "archive": "В архив",
+    "moveToInbox": "Во входящие",
+    "delete": "Удалить",
+    "deleteForever": "Удалить навсегда",
+    "restore": "Восстановить",
+    "markRead": "Отметить прочитанным",
+    "markUnread": "Отметить непрочитанным",
+    "hasAttachments": "Есть вложения",
+    "reply": "Ответить",
+    "openInComposer": "Открыть в редакторе",
+    "replyingTo": "Ответ для {recipient}",
+    "backTo": "Назад: {folder}",
+    "backToResults": "Назад к результатам",
+    "draftBadge": "Черновик",
+    "draftTotal": "{count, plural, one {# черновик} few {# черновика} other {# черновиков}}"
   },
   "nav": {
-    "mail": "Почта",
     "dashboard": "Панель",
-    "inbox": "Входящие",
-    "sent": "Отправленные",
     "compose": "Написать",
-    "drafts": "Черновики",
     "statistics": "Статистика",
     "settings": "Настройки",
-    "conversation": "Переписка",
     "logOut": "Выйти",
     "users": "Пользователи",
     "mailboxes": "Адреса",
+    "insights": "Аналитика",
+    "changePassword": "Сменить пароль",
     "administration": "Администрирование"
   },
   "auth": {
@@ -70,38 +79,7 @@
     "failed": "Ошибки",
     "recentActivity": "Недавняя активность",
     "noRecentEvents": "Нет недавних событий.",
-    "composeTitle": "Написать сообщение",
-    "composeDescription": "Отправьте первое письмо через Resend Panel.",
     "newMessage": "Новое сообщение"
-  },
-  "inbox": {
-    "title": "Входящие",
-    "threadCount": "{count, plural, one {# переписка} few {# переписки} many {# переписок} other {# переписки}}",
-    "newMessage": "Новое сообщение",
-    "emptyTitle": "Пока нет переписок",
-    "emptyDescription": "Отправьте письмо или настройте входящие webhook для получения сообщений.",
-    "participants": "{count, plural, one {# участник} few {# участника} many {# участников} other {# участника}}",
-    "reply": "Ответить",
-    "selectThreadTitle": "Выберите переписку",
-    "selectThreadDescription": "Выберите переписку из списка, чтобы прочитать сообщения.",
-    "backToInbox": "Назад ко входящим",
-    "forward": "Переслать",
-    "archive": "В архив",
-    "delete": "Удалить",
-    "more": "Ещё",
-    "replyPlaceholder": "Ответить…"
-  },
-  "sent": {
-    "title": "Отправленные сообщения",
-    "messageCount": "{count, plural, one {# отправленное сообщение} few {# отправленных сообщения} many {# отправленных сообщений} other {# отправленных сообщения}}",
-    "emptyTitle": "Нет отправленных сообщений",
-    "emptyDescription": "Напишите первое письмо, чтобы увидеть его здесь.",
-    "noMessages": "Нет сообщений.",
-    "compose": "Написать",
-    "selectMessageTitle": "Выберите сообщение",
-    "selectMessageDescription": "Выберите отправленное сообщение из списка, чтобы просмотреть детали.",
-    "backToSent": "Назад к отправленным",
-    "viewThread": "Открыть переписку"
   },
   "compose": {
     "newMessage": "Новое сообщение",
@@ -119,23 +97,15 @@
     "bcc": "Скрытая копия",
     "bccPlaceholder": "bcc@company.com",
     "message": "Сообщение",
-    "livePreviewHint": "Предпросмотр обновляется по мере ввода",
     "messagePlaceholder": "Напишите письмо здесь...",
-    "previewPlaceholder": "Здесь появится предпросмотр сообщения.",
     "saveDraft": "Сохранить черновик",
     "sendMessage": "Отправить",
     "sending": "Отправка...",
-    "preview": "Предпросмотр",
-    "previewDescription": "Очищенный HTML, который будет отправлен через Resend.",
     "from": "От кого",
-    "noMailbox": "Вам пока не назначен ни один адрес. Попросите владельца назначить адрес, чтобы отправлять письма."
-  },
-  "drafts": {
-    "title": "Черновики",
-    "draftCount": "{count, plural, one {# черновик} few {# черновика} many {# черновиков} other {# черновика}}",
-    "emptyTitle": "Нет черновиков",
-    "emptyDescription": "Начните писать сообщение, чтобы создать черновик.",
-    "badge": "Черновик"
+    "noMailbox": "Вам пока не назначен ни один адрес. Попросите владельца назначить адрес, чтобы отправлять письма.",
+    "addCopies": "Копия / Скрытая",
+    "discard": "Отменить",
+    "attachmentHint": "До 10 МБ на файл"
   },
   "statistics": {
     "title": "Статистика email",
@@ -191,11 +161,6 @@
   "direction": {
     "inbound": "входящее",
     "outbound": "исходящее"
-  },
-  "time": {
-    "minutesAgo": "{count} мин. назад",
-    "hoursAgo": "{count} ч. назад",
-    "daysAgo": "{count} дн. назад"
   },
   "errors": {
     "registrationClosed": "Регистрация закрыта после создания первого аккаунта.",
@@ -294,5 +259,36 @@
     "create": "Создать",
     "save": "Сохранить",
     "cancel": "Отмена"
+  },
+  "folders": {
+    "inbox": "Входящие",
+    "starred": "Отмеченные",
+    "sent": "Отправленные",
+    "drafts": "Черновики",
+    "archive": "Архив",
+    "trash": "Корзина"
+  },
+  "theme": {
+    "label": "Тема",
+    "light": "Светлая",
+    "dark": "Тёмная",
+    "system": "Как в системе"
+  },
+  "empty": {
+    "searchTitle": "Результаты по запросу «{query}»",
+    "inboxTitle": "Входящие пусты",
+    "inboxDescription": "Новые письма для ваших ящиков появятся здесь.",
+    "starredTitle": "Нет отмеченных",
+    "starredDescription": "Отметьте переписку, чтобы она была под рукой.",
+    "archiveTitle": "Архив пуст",
+    "archiveDescription": "Письма из архива уходят из входящих, но не удаляются.",
+    "trashTitle": "Корзина пуста",
+    "trashDescription": "Удалённые переписки ждут здесь окончательного удаления.",
+    "sentTitle": "Ничего не отправлено",
+    "sentDescription": "Отправленные письма появятся здесь.",
+    "draftsTitle": "Черновиков нет",
+    "draftsDescription": "Начните письмо и сохраните его, чтобы вернуться позже.",
+    "searchNoResultsTitle": "Ничего не найдено",
+    "searchDescription": "Попробуйте другое имя, адрес или тему."
   }
 }

@@ -18,7 +18,7 @@ export function ChangePasswordForm({ action, required }: { action: Action; requi
   const tc = useTranslations("common")
 
   return (
-    <Card className="border-border/80 bg-white/95 shadow-[0_24px_80px_-30px_rgba(0,0,0,0.35)]">
+    <Card className="shadow-sm">
       <CardHeader className="space-y-2">
         <CardTitle className="text-2xl">{t("changePassword")}</CardTitle>
         <CardDescription>

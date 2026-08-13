@@ -63,9 +63,39 @@ export type Thread = {
   mailboxId?: ID
   subject: string
   participants: string[]
+  isStarred: boolean
+  isArchived: boolean
+  isTrashed: boolean
   createdAt: Timestamp
   updatedAt: Timestamp
   lastMessageAt: Timestamp
+}
+
+/**
+ * A thread plus everything the list row needs, so the list renders from one query
+ * instead of a preview lookup per row.
+ */
+export type ThreadSummary = Thread & {
+  unreadCount: number
+  messageCount: number
+  snippet: string
+  /** Who the row is "about": the other party, not your own mailbox. */
+  correspondent: string
+  hasAttachments: boolean
+}
+
+/**
+ * Views the thread list can render. `drafts` is the one that is not thread-backed
+ * and has its own page; `search` spans every folder except trash.
+ */
+export type MailFolder = "inbox" | "starred" | "archive" | "trash" | "sent" | "drafts" | "search"
+
+export type FolderCounts = {
+  inbox: number
+  starred: number
+  archive: number
+  trash: number
+  drafts: number
 }
 
 export type MessageDirection = "inbound" | "outbound"
@@ -93,6 +123,7 @@ export type Message = {
   bcc: string[]
   text: string
   html: string
+  isRead: boolean
   providerId?: string
   inReplyTo?: string
   references?: string[]

@@ -26,7 +26,7 @@ export function AuthForm({ title, description, action, submitLabel, confirmPassw
   const tc = useTranslations("common")
 
   return (
-    <Card className="border-border/80 bg-white/95 shadow-[0_24px_80px_-30px_rgba(0,0,0,0.35)]">
+    <Card className="shadow-sm">
       <CardHeader className="space-y-2">
         <CardTitle className="text-2xl">{title}</CardTitle>
         <CardDescription>{description}</CardDescription>

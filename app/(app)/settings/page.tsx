@@ -2,6 +2,7 @@ import { getTranslations } from "next-intl/server"
 import { requireOwner } from "@/lib/auth"
 import { getCurrentWorkspace, getCurrentSettings } from "@/lib/store"
 import { saveSettingsAction, syncResendHistoryAction, testResendConnectionAction } from "@/app/actions"
+import { ContentPage } from "@/components/mail/content-page"
 import { SettingsForm } from "@/components/settings-form"
 
 export default async function SettingsPage() {
@@ -13,12 +14,7 @@ export default async function SettingsPage() {
   const settings = await getCurrentSettings()
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold">{t("title")}</h2>
-        <p className="text-sm text-muted-foreground">{t("description")}</p>
-      </div>
-
+    <ContentPage title={t("title")} description={t("description")}>
       <SettingsForm
         action={saveSettingsAction}
         testAction={testResendConnectionAction}
@@ -28,6 +24,6 @@ export default async function SettingsPage() {
         initialInboundEmail={settings?.inboundEmail ?? ""}
         hasToken={Boolean(settings?.tokenEncrypted)}
       />
-    </div>
+    </ContentPage>
   )
 }

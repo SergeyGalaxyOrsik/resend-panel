@@ -1,12 +1,16 @@
 import { createToken } from "@/lib/crypto"
+import { buildPreviewText } from "@/lib/email-html"
 import { supabase } from "@/lib/supabase"
 import type {
   Draft,
   Mailbox,
   MailboxScope,
+  FolderCounts,
+  MailFolder,
   ManagedUser,
   Message,
   MessageEvent,
+  ThreadSummary,
   ResendSettings,
   Session,
   Thread,
@@ -368,7 +372,7 @@ export async function ensureThread(
   workspaceId: string,
   subject: string,
   participants: string[],
-  options?: { messageAt?: string; mailboxId?: string }
+  options?: { messageAt?: string; mailboxId?: string; reactivate?: boolean }
 ) {
   const normalizedSubject = subject.trim() || "No subject"
   const uniqueParticipants = Array.from(new Set(participants))
@@ -391,6 +395,11 @@ export async function ensureThread(
     const now = new Date().toISOString()
     // A thread keeps the first mailbox it was linked to; only fill an empty link.
     const mailboxId = (existing.mailbox_id as string | null) ?? options?.mailboxId ?? null
+    // New mail pulls a thread back out of archive and trash, the way Gmail does.
+    const revived = options?.reactivate
+      ? { is_archived: false, is_trashed: false, trashed_at: null }
+      : {}
+
     await supabase
       .from("threads")
       .update({
@@ -398,6 +407,7 @@ export async function ensureThread(
         updated_at: now,
         last_message_at: lastMessageAt,
         mailbox_id: mailboxId,
+        ...revived,
       })
       .eq("id", existing.id)
 
@@ -407,6 +417,7 @@ export async function ensureThread(
       updated_at: now,
       last_message_at: lastMessageAt,
       mailbox_id: mailboxId,
+      ...revived,
     })
   }
 
@@ -417,6 +428,9 @@ export async function ensureThread(
     mailboxId: options?.mailboxId,
     subject: normalizedSubject,
     participants: uniqueParticipants,
+    isStarred: false,
+    isArchived: false,
+    isTrashed: false,
     createdAt: initialAt,
     updatedAt: initialAt,
     lastMessageAt: initialAt,
@@ -428,6 +442,9 @@ export async function ensureThread(
     mailbox_id: thread.mailboxId ?? null,
     subject: thread.subject,
     participants: thread.participants,
+    is_starred: false,
+    is_archived: false,
+    is_trashed: false,
     created_at: thread.createdAt,
     updated_at: thread.updatedAt,
     last_message_at: thread.lastMessageAt,
@@ -543,18 +560,356 @@ export async function getThreadWithMessages(workspaceId: string, threadId: strin
   }
 }
 
+// ── Folders (Gmail-style state) ────────────────────────────
+
+type ThreadFilter = { eq(column: string, value: unknown): ThreadFilter }
+
+/**
+ * The one place that turns a folder name into a thread filter. Trash wins over
+ * archive, so a trashed thread never shows up in two places at once. The generic
+ * hands the caller its own builder type back, so `.order()` and `.select()` still
+ * resolve after filtering.
+ */
+function applyFolder<T>(query: T, folder: MailFolder): T {
+  const filter = query as ThreadFilter
+
+  switch (folder) {
+    case "starred":
+      return filter.eq("is_trashed", false).eq("is_starred", true) as T
+    case "archive":
+      return filter.eq("is_trashed", false).eq("is_archived", true) as T
+    case "trash":
+      return filter.eq("is_trashed", true) as T
+    // Sent and search deliberately reach across archive: a message you sent stays in
+    // Sent after the conversation is archived, exactly as in Gmail.
+    case "sent":
+    case "search":
+      return filter.eq("is_trashed", false) as T
+    default:
+      return filter.eq("is_trashed", false).eq("is_archived", false) as T
+  }
+}
+
+/**
+ * One row per thread with everything the list needs: unread count, snippet, the
+ * other party, and whether anything is attached. Message reads stay mailbox-scoped
+ * so a member never sees preview text from a mailbox they do not own.
+ */
+export async function listThreadSummaries(
+  workspaceId: string,
+  folder: MailFolder,
+  scope?: MailboxScope,
+  options?: { query?: string }
+): Promise<ThreadSummary[]> {
+  let threadQuery = supabase.from("threads").select("*").eq("workspace_id", workspaceId)
+
+  const allowed = mailboxFilter(scope)
+  if (allowed) threadQuery = threadQuery.in("mailbox_id", allowed)
+
+  // Sent is "threads I have written in", so it is derived from outbound messages
+  // rather than from a flag on the thread.
+  if (folder === "sent") {
+    const sentThreadIds = await threadIdsWithOutbound(workspaceId, scope)
+    if (!sentThreadIds.length) return []
+    threadQuery = threadQuery.in("id", sentThreadIds)
+  }
+
+  const { data: threadRows } = await applyFolder(threadQuery, folder).order("last_message_at", {
+    ascending: false,
+  })
+
+  const threads = (threadRows || []).map(mapThread)
+  if (!threads.length) return []
+
+  const threadIds = threads.map((thread) => thread.id)
+
+  let messageQuery = supabase
+    .from("messages")
+    .select("id, thread_id, text, from_email, to, direction, is_read, created_at, sent_at, received_at")
+    .eq("workspace_id", workspaceId)
+    .in("thread_id", threadIds)
+
+  if (allowed) messageQuery = messageQuery.in("mailbox_id", allowed)
+
+  const { data: messageRows } = await messageQuery
+
+  const withAttachments = await messageIdsWithAttachments(
+    (messageRows || []).map((row) => row.id as string)
+  )
+
+  type Latest = { at: number; snippet: string; correspondent: string }
+  const stats = new Map<
+    string,
+    { unread: number; count: number; attachments: boolean; latest: Latest | null }
+  >()
+
+  for (const row of messageRows || []) {
+    const threadId = row.thread_id as string
+    const entry = stats.get(threadId) ?? { unread: 0, count: 0, attachments: false, latest: null }
+
+    entry.count += 1
+    if (!(row.is_read as boolean)) entry.unread += 1
+    if (withAttachments.has(row.id as string)) entry.attachments = true
+
+    const direction = row.direction as Message["direction"]
+    const timestamp =
+      direction === "outbound"
+        ? ((row.sent_at as string | null) ?? (row.created_at as string))
+        : ((row.received_at as string | null) ?? (row.created_at as string))
+    const at = new Date(timestamp).getTime()
+
+    if (!entry.latest || at >= entry.latest.at) {
+      const recipients = (row.to as string[]) || []
+      entry.latest = {
+        at,
+        // Shared with the reader so list previews lose the same tracking noise
+        // ("[image: ...]", bare click-through URLs) the message body drops.
+        snippet: buildPreviewText((row.text as string) || ""),
+        // Show the other party: your own address on a row you sent tells you nothing.
+        correspondent:
+          direction === "outbound" ? (recipients[0] ?? "") : ((row.from_email as string) || ""),
+      }
+    }
+
+    stats.set(threadId, entry)
+  }
+
+  const summaries: ThreadSummary[] = threads.map((thread) => {
+    const entry = stats.get(thread.id)
+    return {
+      ...thread,
+      unreadCount: entry?.unread ?? 0,
+      messageCount: entry?.count ?? 0,
+      snippet: entry?.latest?.snippet ?? "",
+      correspondent: entry?.latest?.correspondent || thread.participants[0] || "",
+      hasAttachments: entry?.attachments ?? false,
+    }
+  })
+
+  const query = options?.query?.trim().toLowerCase()
+  if (!query) return summaries
+
+  return summaries.filter((thread) =>
+    [thread.subject, thread.snippet, thread.correspondent, ...thread.participants].some((field) =>
+      field.toLowerCase().includes(query)
+    )
+  )
+}
+
+async function threadIdsWithOutbound(workspaceId: string, scope?: MailboxScope) {
+  let query = supabase
+    .from("messages")
+    .select("thread_id")
+    .eq("workspace_id", workspaceId)
+    .eq("direction", "outbound")
+
+  const allowed = mailboxFilter(scope)
+  if (allowed) query = query.in("mailbox_id", allowed)
+
+  const { data } = await query
+  return Array.from(new Set((data || []).map((row) => row.thread_id as string).filter(Boolean)))
+}
+
+async function messageIdsWithAttachments(messageIds: string[]) {
+  if (!messageIds.length) return new Set<string>()
+
+  const { data } = await supabase
+    .from("attachments")
+    .select("message_id")
+    .in("message_id", messageIds)
+
+  return new Set((data || []).map((row) => row.message_id as string).filter(Boolean))
+}
+
+/** Badge numbers for the folder rail. Inbox counts unread; the rest count threads. */
+export async function getFolderCounts(
+  workspaceId: string,
+  userId: string,
+  scope?: MailboxScope
+): Promise<FolderCounts> {
+  const allowed = mailboxFilter(scope)
+
+  function threadQuery() {
+    let query = supabase
+      .from("threads")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+    if (allowed) query = query.in("mailbox_id", allowed)
+    return query
+  }
+
+  const [starred, archive, trash, drafts] = await Promise.all([
+    applyFolder(threadQuery(), "starred"),
+    applyFolder(threadQuery(), "archive"),
+    applyFolder(threadQuery(), "trash"),
+    supabase
+      .from("drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", userId),
+  ])
+
+  return {
+    inbox: await countUnreadInbox(workspaceId, scope),
+    starred: starred.count ?? 0,
+    archive: archive.count ?? 0,
+    trash: trash.count ?? 0,
+    drafts: drafts.count ?? 0,
+  }
+}
+
+/**
+ * Unread threads, not unread messages: the rail should agree with the bold rows the
+ * list actually shows.
+ */
+async function countUnreadInbox(workspaceId: string, scope?: MailboxScope) {
+  const allowed = mailboxFilter(scope)
+
+  let threadQuery = supabase.from("threads").select("id").eq("workspace_id", workspaceId)
+  if (allowed) threadQuery = threadQuery.in("mailbox_id", allowed)
+
+  const { data: threadRows } = await applyFolder(threadQuery, "inbox")
+  const threadIds = (threadRows || []).map((row) => row.id as string)
+  if (!threadIds.length) return 0
+
+  let messageQuery = supabase
+    .from("messages")
+    .select("thread_id")
+    .eq("workspace_id", workspaceId)
+    .eq("is_read", false)
+    .in("thread_id", threadIds)
+
+  if (allowed) messageQuery = messageQuery.in("mailbox_id", allowed)
+
+  const { data } = await messageQuery
+  return new Set((data || []).map((row) => row.thread_id as string)).size
+}
+
+/** Narrows a caller-supplied id list to the threads this scope may actually touch. */
+async function accessibleThreadIds(workspaceId: string, threadIds: string[], scope?: MailboxScope) {
+  if (!threadIds.length) return []
+
+  let query = supabase
+    .from("threads")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .in("id", threadIds)
+
+  const allowed = mailboxFilter(scope)
+  if (allowed) query = query.in("mailbox_id", allowed)
+
+  const { data } = await query
+  return (data || []).map((row) => row.id as string)
+}
+
+export async function setThreadsStarred(
+  workspaceId: string,
+  threadIds: string[],
+  isStarred: boolean,
+  scope?: MailboxScope
+) {
+  const ids = await accessibleThreadIds(workspaceId, threadIds, scope)
+  if (!ids.length) return 0
+
+  await supabase.from("threads").update({ is_starred: isStarred }).in("id", ids)
+  return ids.length
+}
+
+export async function setThreadsArchived(
+  workspaceId: string,
+  threadIds: string[],
+  isArchived: boolean,
+  scope?: MailboxScope
+) {
+  const ids = await accessibleThreadIds(workspaceId, threadIds, scope)
+  if (!ids.length) return 0
+
+  // Archiving also lifts a thread out of trash, so the two flags never disagree.
+  await supabase
+    .from("threads")
+    .update({ is_archived: isArchived, is_trashed: false, trashed_at: null })
+    .in("id", ids)
+
+  return ids.length
+}
+
+export async function setThreadsTrashed(
+  workspaceId: string,
+  threadIds: string[],
+  isTrashed: boolean,
+  scope?: MailboxScope
+) {
+  const ids = await accessibleThreadIds(workspaceId, threadIds, scope)
+  if (!ids.length) return 0
+
+  await supabase
+    .from("threads")
+    .update({ is_trashed: isTrashed, trashed_at: isTrashed ? new Date().toISOString() : null })
+    .in("id", ids)
+
+  return ids.length
+}
+
+/** Permanent delete from trash: the thread, its messages, and their events. */
+export async function deleteThreadsForever(
+  workspaceId: string,
+  threadIds: string[],
+  scope?: MailboxScope
+) {
+  const ids = await accessibleThreadIds(workspaceId, threadIds, scope)
+  if (!ids.length) return 0
+
+  const { data: messageRows } = await supabase
+    .from("messages")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .in("thread_id", ids)
+
+  const messageIds = (messageRows || []).map((row) => row.id as string)
+
+  if (messageIds.length) {
+    await supabase.from("message_events").delete().in("message_id", messageIds)
+    await supabase.from("attachments").delete().in("message_id", messageIds)
+    await supabase.from("messages").delete().in("id", messageIds)
+  }
+
+  await supabase.from("threads").delete().in("id", ids)
+  return ids.length
+}
+
+export async function setThreadsRead(
+  workspaceId: string,
+  threadIds: string[],
+  isRead: boolean,
+  scope?: MailboxScope
+) {
+  const ids = await accessibleThreadIds(workspaceId, threadIds, scope)
+  if (!ids.length) return 0
+
+  let query = supabase.from("messages").update({ is_read: isRead }).eq("workspace_id", workspaceId)
+
+  const allowed = mailboxFilter(scope)
+  if (allowed) query = query.in("mailbox_id", allowed)
+
+  await query.in("thread_id", ids)
+  return ids.length
+}
+
 // ── Messages ───────────────────────────────────────────────
 
 export async function createMessage(
-  payload: Omit<Message, "id" | "createdAt" | "updatedAt"> & {
+  payload: Omit<Message, "id" | "createdAt" | "updatedAt" | "isRead"> & {
     id?: string
     createdAt?: string
     updatedAt?: string
+    isRead?: boolean
   }
 ) {
   const now = new Date().toISOString()
   const message: Message = {
     ...payload,
+    // Mail you sent is never unread; inbound arrives unread unless told otherwise.
+    isRead: payload.isRead ?? payload.direction === "outbound",
     id: payload.id ?? createToken("message"),
     createdAt: payload.createdAt ?? now,
     updatedAt: payload.updatedAt ?? now,
@@ -575,6 +930,7 @@ export async function createMessage(
     bcc: message.bcc,
     text: message.text,
     html: message.html,
+    is_read: message.isRead,
     provider_id: message.providerId,
     in_reply_to: message.inReplyTo,
     references_list: message.references,
@@ -599,6 +955,7 @@ export async function updateMessage(messageId: string, updater: Partial<Message>
   if (updater.html !== undefined) updates.html = updater.html
   if (updater.text !== undefined) updates.text = updater.text
   if (updater.threadId !== undefined) updates.thread_id = updater.threadId
+  if (updater.isRead !== undefined) updates.is_read = updater.isRead
 
   const { data, error } = await supabase.from("messages").update(updates).eq("id", messageId).select().maybeSingle()
 
@@ -807,6 +1164,9 @@ export async function getStats(workspaceId: string, userId: string, scope?: Mail
   const { data: messages } = await messagesQuery
   const allMessages = (messages || []).map(mapMessage)
 
+  // Events carry no mailbox of their own, so restrict them to the messages in scope.
+  const scopedMessageIds = allowed ? allMessages.map((message) => message.id) : null
+
   let eventsQuery = supabase
     .from("message_events")
     .select("*")
@@ -814,11 +1174,34 @@ export async function getStats(workspaceId: string, userId: string, scope?: Mail
     .order("created_at", { ascending: false })
     .limit(8)
 
-  // Events carry no mailbox of their own, so restrict them to the messages in scope.
-  if (allowed) eventsQuery = eventsQuery.in("message_id", allMessages.map((message) => message.id))
+  if (scopedMessageIds) eventsQuery = eventsQuery.in("message_id", scopedMessageIds)
 
   const { data: events } = await eventsQuery
-  const allEvents = (events || []).map(mapEvent)
+  const recentEvents = (events || []).map(mapEvent)
+
+  /**
+   * Counted with their own queries rather than from the recent-events list: that
+   * list is capped at eight rows, so deriving totals from it reported "4 delivered"
+   * for a workspace that had delivered hundreds.
+   */
+  async function countEvents(type: MessageEvent["type"]) {
+    let query = supabase
+      .from("message_events")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId)
+      .eq("type", type)
+
+    if (scopedMessageIds) query = query.in("message_id", scopedMessageIds)
+
+    const { count } = await query
+    return count ?? 0
+  }
+
+  const [delivered, opened, clicked] = await Promise.all([
+    countEvents("delivered"),
+    countEvents("opened"),
+    countEvents("clicked"),
+  ])
 
   const countBy = (predicate: (m: Message) => boolean) => allMessages.filter(predicate).length
 
@@ -834,11 +1217,11 @@ export async function getStats(workspaceId: string, userId: string, scope?: Mail
     inbox: countBy((m) => m.direction === "inbound"),
     drafts: drafts?.length ?? 0,
     failed: allMessages.filter((m) => m.status === "failed").length,
-    delivered: allEvents.filter((e) => e.type === "delivered").length,
-    opened: allEvents.filter((e) => e.type === "opened").length,
-    clicked: allEvents.filter((e) => e.type === "clicked").length,
+    delivered,
+    opened,
+    clicked,
     replied: allMessages.filter((m) => m.inReplyTo).length,
-    recentEvents: allEvents,
+    recentEvents,
     avgResponseMinutes: computeAvgResponseMinutes(allMessages),
   }
 }
@@ -962,6 +1345,9 @@ function mapThread(row: Record<string, unknown>): Thread {
     mailboxId: (row.mailbox_id as string | null) ?? undefined,
     subject: row.subject as string,
     participants: (row.participants as string[]) || [],
+    isStarred: (row.is_starred as boolean) ?? false,
+    isArchived: (row.is_archived as boolean) ?? false,
+    isTrashed: (row.is_trashed as boolean) ?? false,
     createdAt: row.created_at as string,
     updatedAt: row.updated_at as string,
     lastMessageAt: row.last_message_at as string,
@@ -984,6 +1370,7 @@ function mapMessage(row: Record<string, unknown>): Message {
     bcc: (row.bcc as string[]) || [],
     text: row.text as string,
     html: row.html as string,
+    isRead: (row.is_read as boolean) ?? false,
     providerId: row.provider_id as string | undefined,
     inReplyTo: row.in_reply_to as string | undefined,
     references: (row.references_list as string[]) || [],

@@ -210,6 +210,19 @@ member out of another's mail. That last one matters most: the server talks to
 Supabase with the secret key, so a query that forgets its scope is not stopped by
 anything in the database.
 
+End-to-end smoke tests run against a real install, so they need a configured `.env`
+with the migrations applied:
+
+```bash
+bunx playwright install chromium   # once
+bun run test:e2e                   # builds, starts the app, then drives it
+E2E_BASE_URL=https://your-domain bun run test:e2e   # or point at a running deployment
+```
+
+They check the health contract, that an anonymous visitor lands on sign-in, that a
+sixth failed sign-in is locked out (against a throwaway address, never a real
+account), and that an unsigned webhook is refused.
+
 ## Docker
 
 Build and run locally:

@@ -608,7 +608,7 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
       return { error: t("sendInProgress") }
     }
 
-    redirect(receipt.threadId ? `/inbox/${receipt.threadId}` : "/sent")
+    redirect(receipt.threadId ? `/thread/${receipt.threadId}?from=inbox` : "/sent")
   }
 
   const settingsToken = getResendToken(settings?.tokenEncrypted)
@@ -647,10 +647,12 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
   revalidatePath("/inbox")
   revalidatePath("/statistics")
   if (finalThreadId) {
-    revalidatePath(`/inbox/${finalThreadId}`)
+    revalidatePath(`/thread/${finalThreadId}`)
   }
 
-  redirect(finalThreadId ? `/inbox/${finalThreadId}` : "/sent")
+  // The reader lives at /thread/[id]; /inbox/[id] is not a route, so sending used
+  // to land on a 404 instead of the conversation that was just replied to.
+  redirect(finalThreadId ? `/thread/${finalThreadId}?from=inbox` : "/sent")
 }
 
 export async function inboundWebhookAction(requestBody: unknown) {

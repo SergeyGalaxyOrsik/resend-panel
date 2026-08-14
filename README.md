@@ -19,6 +19,8 @@ bulk actions, keyboard shortcuts and a sandboxed message reader.
 - **Compose & drafts** — send through the Resend API, save and resume drafts
 - **Delivery stats** — sent, delivered, opened, clicked, failed metrics
 - **Settings** — encrypted Resend API token storage, connection test, sender identity config
+- **Audit log** — every change to accounts, mailboxes and the Resend credentials is
+  recorded with actor, target and client address, on an owner-only page
 - **Login throttling** — failed sign-ins are counted per email and per client address, and
   lock out with a doubling delay, so a password cannot be guessed at machine speed
 - **Light and dark themes** — follows the system by default
@@ -201,7 +203,7 @@ app/
 │   ├── search/             # results for the global search box
 │   ├── thread/[threadId]/  # the one reader, ?from= decides where "back" goes
 │   ├── drafts/, compose/, dashboard/, statistics/
-│   └── settings/, users/, mailboxes/           # owner only
+│   └── settings/, users/, mailboxes/, audit/   # owner only
 ├── mail-actions.ts         # star / archive / trash / read mutations
 ├── api/inbound/            # Inbound email webhook
 ├── api/events/             # Delivery/open/click events

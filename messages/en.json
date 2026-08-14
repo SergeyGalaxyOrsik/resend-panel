@@ -48,6 +48,7 @@
     "logOut": "Log out",
     "users": "Users",
     "mailboxes": "Mailboxes",
+    "audit": "Audit log",
     "insights": "Insights",
     "changePassword": "Change password",
     "administration": "Administration"
@@ -239,6 +240,39 @@
     "save": "Save",
     "cancel": "Cancel",
     "done": "Done"
+  },
+  "audit": {
+    "title": "Audit log",
+    "description": "Who changed access, credentials and mailboxes, newest first",
+    "when": "When",
+    "actor": "Actor",
+    "action": "Action",
+    "target": "Target",
+    "address": "Address",
+    "systemActor": "System",
+    "empty": "Nothing recorded yet. Administrative changes show up here as they happen.",
+    "previous": "Previous",
+    "next": "Next",
+    "pageOf": "Page {page} of {pages} · {total} entries",
+    "actions": {
+      "signedIn": "Signed in",
+      "signInBlocked": "Sign-in blocked",
+      "signedOut": "Signed out",
+      "passwordChanged": "Password changed",
+      "sessionsRevoked": "Sessions revoked",
+      "settingsUpdated": "Settings updated",
+      "tokenUpdated": "Resend token replaced",
+      "historySynced": "History synced",
+      "userCreated": "User created",
+      "mailboxesAssigned": "Mailboxes assigned",
+      "userActivated": "User activated",
+      "userDeactivated": "User deactivated",
+      "userDeleted": "User deleted",
+      "mailboxCreated": "Mailbox created",
+      "mailboxUpdated": "Mailbox renamed",
+      "mailboxDeleted": "Mailbox deleted",
+      "webhookRetried": "Webhook retried"
+    }
   },
   "mailboxes": {
     "title": "Mailboxes",

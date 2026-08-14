@@ -186,6 +186,43 @@ export type CreateUserState = AuthState & {
   temporaryPassword?: string
 }
 
+/**
+ * Every administrative action worth answering "who did this?" for. The union is
+ * closed so the audit page can label each one instead of printing a raw string.
+ */
+export type AuditAction =
+  | "auth.signed_in"
+  | "auth.sign_in_blocked"
+  | "auth.signed_out"
+  | "auth.password_changed"
+  | "auth.sessions_revoked"
+  | "settings.updated"
+  | "settings.token_updated"
+  | "settings.history_synced"
+  | "user.created"
+  | "user.mailboxes_assigned"
+  | "user.activated"
+  | "user.deactivated"
+  | "user.deleted"
+  | "mailbox.created"
+  | "mailbox.updated"
+  | "mailbox.deleted"
+  | "webhook.retried"
+
+export type AuditEntry = {
+  id: ID
+  workspaceId: ID | null
+  actorUserId: ID | null
+  /** Kept alongside the id so a deleted account still reads as a name. */
+  actorEmail: string
+  action: AuditAction
+  target: string
+  metadata: Record<string, unknown>
+  ip: string
+  userAgent: string
+  createdAt: Timestamp
+}
+
 export type Attachment = {
   id: ID
   messageId: ID | null

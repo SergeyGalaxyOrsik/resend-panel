@@ -48,6 +48,7 @@
     "logOut": "退出登录",
     "users": "用户",
     "mailboxes": "邮箱地址",
+    "audit": "审计日志",
     "insights": "分析",
     "changePassword": "修改密码",
     "administration": "管理"
@@ -239,6 +240,39 @@
     "save": "保存",
     "cancel": "取消",
     "done": "完成"
+  },
+  "audit": {
+    "title": "审计日志",
+    "description": "谁修改了访问权限、凭据和邮箱，最新在前",
+    "when": "时间",
+    "actor": "操作者",
+    "action": "操作",
+    "target": "对象",
+    "address": "地址",
+    "systemActor": "系统",
+    "empty": "暂无记录。管理操作发生后会显示在这里。",
+    "previous": "上一页",
+    "next": "下一页",
+    "pageOf": "第 {page} / {pages} 页 · 共 {total} 条",
+    "actions": {
+      "signedIn": "已登录",
+      "signInBlocked": "登录被阻止",
+      "signedOut": "已退出",
+      "passwordChanged": "密码已修改",
+      "sessionsRevoked": "会话已撤销",
+      "settingsUpdated": "设置已更新",
+      "tokenUpdated": "Resend 令牌已更换",
+      "historySynced": "历史已同步",
+      "userCreated": "已创建用户",
+      "mailboxesAssigned": "已分配邮箱",
+      "userActivated": "已启用用户",
+      "userDeactivated": "已停用用户",
+      "userDeleted": "已删除用户",
+      "mailboxCreated": "已创建邮箱",
+      "mailboxUpdated": "已重命名邮箱",
+      "mailboxDeleted": "已删除邮箱",
+      "webhookRetried": "已重试 Webhook"
+    }
   },
   "mailboxes": {
     "title": "邮箱地址",

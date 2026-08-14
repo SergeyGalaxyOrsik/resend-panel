@@ -6,6 +6,7 @@ import { getTranslations } from "next-intl/server"
 import {
   clearSession,
   establishSession,
+  getCurrentUser,
   getMailboxScope,
   registerOwner,
   requireAuthenticatedUser,
@@ -73,6 +74,7 @@ import {
   purgeExpiredThrottles,
   registerFailure,
 } from "@/lib/rate-limit"
+import { recordAudit } from "@/lib/audit"
 import { getClientAddress } from "@/lib/request"
 import { mapResendEventType } from "@/lib/webhooks"
 import { syncResendHistory } from "@/lib/resend-sync"
@@ -137,12 +139,16 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
   // attacker one query and tells them nothing about the password.
   const throttle = await checkThrottle(keys)
   if (throttle.locked) {
+    await recordAudit({ action: "auth.sign_in_blocked", target: email })
     return { error: t("tooManyAttempts", { minutes: throttle.retryAfterMinutes }) }
   }
 
   const user = await verifyLogin(email, password)
   if (!user) {
     const failure = await registerFailure(keys)
+    if (failure.locked) {
+      await recordAudit({ action: "auth.sign_in_blocked", target: email })
+    }
     return {
       error: failure.locked
         ? t("tooManyAttempts", { minutes: failure.retryAfterMinutes })
@@ -161,6 +167,7 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
 
   await clearSession()
   await establishSession(user.id)
+  await recordAudit({ action: "auth.signed_in", actor: user, target: user.email })
   redirect(user.mustChangePassword ? "/change-password" : "/dashboard")
 }
 
@@ -208,10 +215,16 @@ export async function changePasswordAction(_prev: AuthState, formData: FormData)
   }
 
   await updateUserPassword(user.id, hashPassword(password), false)
+  await recordAudit({ action: "auth.password_changed", actor: user, target: user.email })
   redirect("/dashboard")
 }
 
 export async function logoutAction() {
+  const user = await getCurrentUser()
+  if (user) {
+    await recordAudit({ action: "auth.signed_out", actor: user, target: user.email })
+  }
+
   await clearSession()
   redirect("/login")
 }
@@ -242,6 +255,15 @@ export async function saveSettingsAction(_prev: AuthState, formData: FormData): 
   }
 
   await updateResendSettings(settingsUpdate)
+
+  await recordAudit({
+    action: token ? "settings.token_updated" : "settings.updated",
+    actor: user,
+    workspaceId: workspace.id,
+    target: fromEmail,
+    // The token itself is never recorded, only the fact that it was replaced.
+    metadata: { fromName, fromEmail, inboundEmail, tokenReplaced: Boolean(token) },
+  })
 
   revalidatePath("/settings")
   return { success: t("settingsSaved", { email: user.email }) }
@@ -276,7 +298,7 @@ export async function testResendConnectionAction(_prev: AuthState): Promise<Auth
 
 export async function syncResendHistoryAction(_prev: AuthState): Promise<AuthState> {
   const t = await getTranslations("errors")
-  await requireOwner()
+  const owner = await requireOwner()
   const settings = await getCurrentSettings()
   const token = getResendToken(settings?.tokenEncrypted)
 
@@ -286,6 +308,12 @@ export async function syncResendHistoryAction(_prev: AuthState): Promise<AuthSta
 
   try {
     const result = await syncResendHistory(token)
+
+    await recordAudit({
+      action: "settings.history_synced",
+      actor: owner,
+      metadata: { imported: result.imported, backfilled: result.backfilled },
+    })
 
     revalidatePath("/dashboard")
     revalidatePath("/sent")
@@ -682,7 +710,7 @@ export async function resendEventWebhookAction(requestBody: unknown) {
 
 export async function createUserAction(_prev: CreateUserState, formData: FormData): Promise<CreateUserState> {
   const t = await getTranslations("errors")
-  await requireOwner()
+  const owner = await requireOwner()
   const workspace = await getCurrentWorkspace()
   if (!workspace) {
     return { error: t("workspaceMissing") }
@@ -711,13 +739,21 @@ export async function createUserAction(_prev: CreateUserState, formData: FormDat
     await setMailboxesForUser(user.id, allowed)
   }
 
+  await recordAudit({
+    action: "user.created",
+    actor: owner,
+    workspaceId: workspace.id,
+    target: email,
+    metadata: { role: user.role, mailboxes: mailboxIds.length },
+  })
+
   revalidatePath("/users")
   return { success: t("userCreated", { email }), createdEmail: email, temporaryPassword }
 }
 
 export async function assignMailboxesAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const t = await getTranslations("errors")
-  await requireOwner()
+  const owner = await requireOwner()
   const workspace = await getCurrentWorkspace()
   if (!workspace) {
     return { error: t("workspaceMissing") }
@@ -736,6 +772,18 @@ export async function assignMailboxesAction(_prev: AuthState, formData: FormData
     .filter((id) => mailboxes.some((mailbox) => mailbox.id === id))
 
   await setMailboxesForUser(user.id, mailboxIds)
+
+  await recordAudit({
+    action: "user.mailboxes_assigned",
+    actor: owner,
+    workspaceId: workspace.id,
+    target: user.email,
+    metadata: {
+      addresses: mailboxes
+        .filter((mailbox) => mailboxIds.includes(mailbox.id))
+        .map((mailbox) => mailbox.address),
+    },
+  })
 
   revalidatePath("/users")
   return { success: t("mailboxesAssigned", { email: user.email }) }
@@ -760,6 +808,12 @@ export async function setUserActiveAction(_prev: AuthState, formData: FormData):
   // Deactivating drops the account's sessions, so an open tab stops working immediately.
   await setUserActive(user.id, isActive)
 
+  await recordAudit({
+    action: isActive ? "user.activated" : "user.deactivated",
+    actor: owner,
+    target: user.email,
+  })
+
   revalidatePath("/users")
   return { success: isActive ? t("userActivated", { email: user.email }) : t("userDeactivated", { email: user.email }) }
 }
@@ -782,6 +836,8 @@ export async function deleteUserAction(_prev: AuthState, formData: FormData): Pr
   await deleteSessionsForUser(user.id)
   await deleteUser(user.id)
 
+  await recordAudit({ action: "user.deleted", actor: owner, target: user.email })
+
   revalidatePath("/users")
   return { success: t("userDeleted", { email: user.email }) }
 }
@@ -790,7 +846,7 @@ export async function deleteUserAction(_prev: AuthState, formData: FormData): Pr
 
 export async function createMailboxAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const t = await getTranslations("errors")
-  await requireOwner()
+  const owner = await requireOwner()
   const workspace = await getCurrentWorkspace()
   if (!workspace) {
     return { error: t("workspaceMissing") }
@@ -809,6 +865,14 @@ export async function createMailboxAction(_prev: AuthState, formData: FormData):
 
   await createMailbox(workspace.id, address, displayName)
 
+  await recordAudit({
+    action: "mailbox.created",
+    actor: owner,
+    workspaceId: workspace.id,
+    target: address,
+    metadata: { displayName },
+  })
+
   revalidatePath("/mailboxes")
   revalidatePath("/users")
   return { success: t("mailboxCreated", { address }) }
@@ -816,7 +880,7 @@ export async function createMailboxAction(_prev: AuthState, formData: FormData):
 
 export async function updateMailboxAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const t = await getTranslations("errors")
-  await requireOwner()
+  const owner = await requireOwner()
   const workspace = await getCurrentWorkspace()
   if (!workspace) {
     return { error: t("workspaceMissing") }
@@ -832,6 +896,14 @@ export async function updateMailboxAction(_prev: AuthState, formData: FormData):
 
   await updateMailbox(mailbox.id, displayName)
 
+  await recordAudit({
+    action: "mailbox.updated",
+    actor: owner,
+    workspaceId: workspace.id,
+    target: mailbox.address,
+    metadata: { displayName },
+  })
+
   revalidatePath("/mailboxes")
   revalidatePath("/users")
   return { success: t("mailboxUpdated", { address: mailbox.address }) }
@@ -839,7 +911,7 @@ export async function updateMailboxAction(_prev: AuthState, formData: FormData):
 
 export async function deleteMailboxAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const t = await getTranslations("errors")
-  await requireOwner()
+  const owner = await requireOwner()
   const workspace = await getCurrentWorkspace()
   if (!workspace) {
     return { error: t("workspaceMissing") }
@@ -855,6 +927,13 @@ export async function deleteMailboxAction(_prev: AuthState, formData: FormData):
   // Mail is kept: the foreign keys null the link, so those threads and messages
   // fall back to being readable by the owner only.
   await deleteMailbox(mailbox.id)
+
+  await recordAudit({
+    action: "mailbox.deleted",
+    actor: owner,
+    workspaceId: workspace.id,
+    target: mailbox.address,
+  })
 
   revalidatePath("/mailboxes")
   revalidatePath("/users")

@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation"
 import {
   ArchiveIcon,
   AtSignIcon,
+  ScrollTextIcon,
   ChartNoAxesColumnIcon,
   FileEditIcon,
   GaugeIcon,
@@ -70,6 +71,7 @@ export function MailSidebar({ counts, isOwner }: MailSidebarProps) {
   const administration = [
     { href: "/users", label: tn("users"), icon: UsersIcon },
     { href: "/mailboxes", label: tn("mailboxes"), icon: AtSignIcon },
+    { href: "/audit", label: tn("audit"), icon: ScrollTextIcon },
     { href: "/settings", label: tn("settings"), icon: Settings2Icon },
   ] as const
 

@@ -48,6 +48,7 @@
     "logOut": "Выйти",
     "users": "Пользователи",
     "mailboxes": "Адреса",
+    "audit": "Журнал аудита",
     "insights": "Аналитика",
     "changePassword": "Сменить пароль",
     "administration": "Администрирование"
@@ -239,6 +240,39 @@
     "save": "Сохранить",
     "cancel": "Отмена",
     "done": "Готово"
+  },
+  "audit": {
+    "title": "Журнал аудита",
+    "description": "Кто менял доступы, ключи и почтовые ящики, новое сверху",
+    "when": "Когда",
+    "actor": "Кто",
+    "action": "Действие",
+    "target": "Объект",
+    "address": "Адрес",
+    "systemActor": "Система",
+    "empty": "Пока пусто. Административные изменения появятся здесь по мере их выполнения.",
+    "previous": "Назад",
+    "next": "Вперёд",
+    "pageOf": "Страница {page} из {pages} · записей: {total}",
+    "actions": {
+      "signedIn": "Вход выполнен",
+      "signInBlocked": "Вход заблокирован",
+      "signedOut": "Выход",
+      "passwordChanged": "Пароль изменён",
+      "sessionsRevoked": "Сессии сброшены",
+      "settingsUpdated": "Настройки обновлены",
+      "tokenUpdated": "Токен Resend заменён",
+      "historySynced": "История синхронизирована",
+      "userCreated": "Пользователь создан",
+      "mailboxesAssigned": "Ящики назначены",
+      "userActivated": "Пользователь активирован",
+      "userDeactivated": "Пользователь отключён",
+      "userDeleted": "Пользователь удалён",
+      "mailboxCreated": "Ящик создан",
+      "mailboxUpdated": "Ящик переименован",
+      "mailboxDeleted": "Ящик удалён",
+      "webhookRetried": "Вебхук переотправлен"
+    }
   },
   "mailboxes": {
     "title": "Адреса",

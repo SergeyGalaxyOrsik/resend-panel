@@ -201,14 +201,25 @@ export async function getCurrentWorkspace() {
 
 // ── Sessions ───────────────────────────────────────────────
 
-export async function createSession(userId: string) {
-  await supabase.from("sessions").delete().eq("user_id", userId)
+const SESSION_LIFETIME_MS = 1000 * 60 * 60 * 24 * 14
 
+/**
+ * Signing in used to delete every other session for the account, so a second
+ * device silently signed the first one out. Sessions are per device now; what
+ * gets cleaned up here is only the account's own expired rows.
+ */
+export async function createSession(userId: string, context?: { ip?: string; userAgent?: string }) {
+  await deleteExpiredSessionsForUser(userId)
+
+  const now = new Date()
   const session: Session = {
     id: createToken("session"),
     userId,
-    createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString(),
+    createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + SESSION_LIFETIME_MS).toISOString(),
+    lastSeenAt: now.toISOString(),
+    ip: context?.ip ?? "",
+    userAgent: context?.userAgent ?? "",
   }
 
   const { error } = await supabase.from("sessions").insert({
@@ -216,6 +227,9 @@ export async function createSession(userId: string) {
     user_id: session.userId,
     created_at: session.createdAt,
     expires_at: session.expiresAt,
+    last_seen_at: session.lastSeenAt,
+    ip: session.ip,
+    user_agent: session.userAgent,
   })
 
   if (error) throw new Error(error.message)
@@ -228,12 +242,48 @@ export async function findSession(sessionToken: string) {
   return mapSession(data)
 }
 
+export async function touchSession(sessionId: string, at = new Date()) {
+  await supabase.from("sessions").update({ last_seen_at: at.toISOString() }).eq("id", sessionId)
+}
+
+export async function listSessionsForUser(userId: string): Promise<Session[]> {
+  const { data } = await supabase
+    .from("sessions")
+    .select("*")
+    .eq("user_id", userId)
+    .gte("expires_at", new Date().toISOString())
+    .order("last_seen_at", { ascending: false })
+
+  return (data || []).map(mapSession)
+}
+
 export async function revokeSession(sessionId: string) {
   await supabase.from("sessions").delete().eq("id", sessionId)
 }
 
 export async function deleteSessionsForUser(userId: string) {
   await supabase.from("sessions").delete().eq("user_id", userId)
+}
+
+/** Used after a password change: the device that changed it stays signed in. */
+export async function deleteOtherSessionsForUser(userId: string, keepSessionId: string) {
+  const { data } = await supabase
+    .from("sessions")
+    .delete()
+    .eq("user_id", userId)
+    .neq("id", keepSessionId)
+    .select("id")
+
+  return data?.length ?? 0
+}
+
+export async function deleteExpiredSessionsForUser(userId: string) {
+  await supabase.from("sessions").delete().eq("user_id", userId).lt("expires_at", new Date().toISOString())
+}
+
+/** Housekeeping for the whole table, called on sign-in. */
+export async function deleteExpiredSessions() {
+  await supabase.from("sessions").delete().lt("expires_at", new Date().toISOString())
 }
 
 // ── Mailboxes ──────────────────────────────────────────────
@@ -1323,6 +1373,9 @@ function mapSession(row: Record<string, unknown>): Session {
     userId: row.user_id as string,
     createdAt: row.created_at as string,
     expiresAt: row.expires_at as string,
+    lastSeenAt: (row.last_seen_at as string) ?? (row.created_at as string),
+    ip: (row.ip as string) ?? "",
+    userAgent: (row.user_agent as string) ?? "",
   }
 }
 

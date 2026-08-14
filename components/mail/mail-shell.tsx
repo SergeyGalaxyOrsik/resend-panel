@@ -19,7 +19,9 @@ type MailShellProps = {
   workspace: Workspace | null
   counts: FolderCounts
   defaultSidebarOpen: boolean
+  sessionCount: number
   logoutAction: () => Promise<void>
+  signOutEverywhereAction: () => Promise<void>
 }
 
 export function MailShell({
@@ -29,7 +31,9 @@ export function MailShell({
   workspace,
   counts,
   defaultSidebarOpen,
+  sessionCount,
   logoutAction,
+  signOutEverywhereAction,
 }: MailShellProps) {
   const tc = useTranslations("common")
 
@@ -61,7 +65,9 @@ export function MailShell({
             email={email}
             role={role}
             workspaceName={workspace?.name ?? tc("workspace")}
+            sessionCount={sessionCount}
             logoutAction={logoutAction}
+            signOutEverywhereAction={signOutEverywhereAction}
           />
         </div>
       </header>

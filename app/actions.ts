@@ -8,10 +8,13 @@ import {
   establishSession,
   getCurrentUser,
   getMailboxScope,
+  purgeExpiredSessions,
   registerOwner,
   requireAuthenticatedUser,
   requireCurrentUser,
   requireOwner,
+  revokeAllSessions,
+  revokeOtherSessions,
   verifyLogin,
 } from "@/lib/auth"
 import {
@@ -167,6 +170,7 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
 
   await clearSession()
   await establishSession(user.id)
+  await purgeExpiredSessions()
   await recordAudit({ action: "auth.signed_in", actor: user, target: user.email })
   redirect(user.mustChangePassword ? "/change-password" : "/dashboard")
 }
@@ -215,8 +219,40 @@ export async function changePasswordAction(_prev: AuthState, formData: FormData)
   }
 
   await updateUserPassword(user.id, hashPassword(password), false)
+
+  // Changing a password is how you throw somebody out, so every other device
+  // loses its session. This one keeps its cookie and stays signed in.
+  const revoked = await revokeOtherSessions(user.id)
+
   await recordAudit({ action: "auth.password_changed", actor: user, target: user.email })
+  if (revoked > 0) {
+    await recordAudit({
+      action: "auth.sessions_revoked",
+      actor: user,
+      target: user.email,
+      metadata: { sessions: revoked, reason: "password change" },
+    })
+  }
+
   redirect("/dashboard")
+}
+
+/**
+ * Drops every session for the account, this one included, then lands on the login
+ * screen. Named for what it does: after this, no device stays signed in.
+ */
+export async function signOutEverywhereAction() {
+  const user = await requireAuthenticatedUser()
+
+  await revokeAllSessions(user.id)
+  await recordAudit({
+    action: "auth.sessions_revoked",
+    actor: user,
+    target: user.email,
+    metadata: { reason: "signed out everywhere" },
+  })
+
+  redirect("/login")
 }
 
 export async function logoutAction() {

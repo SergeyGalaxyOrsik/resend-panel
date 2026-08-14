@@ -19,6 +19,8 @@ bulk actions, keyboard shortcuts and a sandboxed message reader.
 - **Compose & drafts** — send through the Resend API, save and resume drafts
 - **Delivery stats** — sent, delivered, opened, clicked, failed metrics
 - **Settings** — encrypted Resend API token storage, connection test, sender identity config
+- **Sessions per device** — signing in on a second device no longer kicks the first one
+  out; a password change drops every other session, and "sign out everywhere" drops them all
 - **Audit log** — every change to accounts, mailboxes and the Resend credentials is
   recorded with actor, target and client address, on an owner-only page
 - **Login throttling** — failed sign-ins are counted per email and per client address, and

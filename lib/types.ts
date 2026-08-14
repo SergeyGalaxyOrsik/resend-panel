@@ -45,6 +45,10 @@ export type Session = {
   userId: ID
   createdAt: Timestamp
   expiresAt: Timestamp
+  /** Refreshed at most every few minutes, so it costs one write per device. */
+  lastSeenAt: Timestamp
+  ip: string
+  userAgent: string
 }
 
 export type ResendSettings = {

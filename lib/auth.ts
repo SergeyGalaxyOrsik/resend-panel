@@ -3,17 +3,25 @@ import { redirect } from "next/navigation"
 import {
   createSession,
   createUser,
+  deleteExpiredSessions,
+  deleteOtherSessionsForUser,
+  deleteSessionsForUser,
   findSession,
   findUserByEmail,
   findUserById,
   getBootstrapState,
   listMailboxesForUser,
   revokeSession,
+  touchSession,
 } from "@/lib/store"
 import { hashPassword, normalizeEmail, verifyPassword } from "@/lib/crypto"
+import { getClientAddress, getUserAgent } from "@/lib/request"
 import type { MailboxScope, User } from "@/lib/types"
 
 export const SESSION_COOKIE = "resend-panel-session"
+
+/** How stale `last_seen_at` may get before a request pays for an update. */
+const TOUCH_INTERVAL_MS = 10 * 60 * 1000
 
 export async function getCurrentSession() {
   const cookieStore = await cookies()
@@ -28,7 +36,14 @@ export async function getCurrentSession() {
   }
 
   if (new Date(session.expiresAt).getTime() < Date.now()) {
+    // Expired rows used to be ignored on read and left in the table forever.
+    await revokeSession(session.id)
     return null
+  }
+
+  const now = Date.now()
+  if (now - new Date(session.lastSeenAt).getTime() > TOUCH_INTERVAL_MS) {
+    await touchSession(session.id, new Date(now))
   }
 
   return session
@@ -119,7 +134,8 @@ export async function verifyLogin(email: string, password: string) {
 }
 
 export async function establishSession(userId: string) {
-  const session = await createSession(userId)
+  const [ip, userAgent] = await Promise.all([getClientAddress(), getUserAgent()])
+  const session = await createSession(userId, { ip, userAgent })
   const cookieStore = await cookies()
   cookieStore.set(SESSION_COOKIE, session.id, {
     httpOnly: true,
@@ -137,4 +153,31 @@ export async function clearSession() {
     await revokeSession(token)
     cookieStore.delete(SESSION_COOKIE)
   }
+}
+
+/**
+ * Called after a password change. The device that set the new password keeps its
+ * session; every other one is dropped, which is the point of changing a password
+ * you think somebody else has.
+ */
+export async function revokeOtherSessions(userId: string) {
+  const session = await getCurrentSession()
+  if (!session) {
+    await deleteSessionsForUser(userId)
+    return 0
+  }
+
+  return deleteOtherSessionsForUser(userId, session.id)
+}
+
+/** "Sign out everywhere": drops every session, this one included. */
+export async function revokeAllSessions(userId: string) {
+  await deleteSessionsForUser(userId)
+  const cookieStore = await cookies()
+  cookieStore.delete(SESSION_COOKIE)
+}
+
+/** Housekeeping, called on a successful sign-in rather than on a schedule. */
+export async function purgeExpiredSessions() {
+  await deleteExpiredSessions()
 }

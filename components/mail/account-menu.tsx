@@ -2,7 +2,7 @@
 
 import { useTranslations } from "next-intl"
 import { Link } from "@/i18n/navigation"
-import { LogOutIcon, Settings2Icon } from "lucide-react"
+import { LogOutIcon, MonitorSmartphoneIcon, Settings2Icon } from "lucide-react"
 import { avatarTone, getInitials } from "@/lib/mail"
 import {
   DropdownMenu,
@@ -17,10 +17,20 @@ type AccountMenuProps = {
   email: string
   role: string
   workspaceName: string
+  /** Live sessions for this account, this device included. */
+  sessionCount: number
   logoutAction: () => Promise<void>
+  signOutEverywhereAction: () => Promise<void>
 }
 
-export function AccountMenu({ email, role, workspaceName, logoutAction }: AccountMenuProps) {
+export function AccountMenu({
+  email,
+  role,
+  workspaceName,
+  sessionCount,
+  logoutAction,
+  signOutEverywhereAction,
+}: AccountMenuProps) {
   const t = useTranslations("nav")
   const tu = useTranslations("users")
   const isOwner = role === "owner"
@@ -78,6 +88,18 @@ export function AccountMenu({ email, role, workspaceName, logoutAction }: Accoun
             </button>
           </form>
         </DropdownMenuItem>
+        {/* Only worth offering when a second device could actually be signed in. */}
+        {sessionCount > 1 ? (
+          <DropdownMenuItem asChild>
+            <form action={signOutEverywhereAction} className="w-full">
+              <button type="submit" className="flex w-full items-center gap-1.5">
+                <MonitorSmartphoneIcon />
+                <span className="flex-1 text-left">{t("signOutEverywhere")}</span>
+                <span className="text-xs text-muted-foreground">{sessionCount}</span>
+              </button>
+            </form>
+          </DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )

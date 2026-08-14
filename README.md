@@ -188,6 +188,13 @@ deliveries.
 > which the panel records only for messages it sent itself, so anything sent from another
 > deployment, another database, or straight from the Resend API is acknowledged and dropped.
 
+## Health check
+
+`GET /api/health` answers `200` with `{"status":"ok"}` when the configuration is valid
+and Postgres is answering, and `503` with `{"status":"degraded"}` when either check
+fails. The reason stays out of the response, because the route is unauthenticated, and
+is written to the log instead. The Docker image uses it as its `HEALTHCHECK`.
+
 ## Docker
 
 Build and run locally:

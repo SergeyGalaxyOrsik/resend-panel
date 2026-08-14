@@ -223,6 +223,10 @@ They check the health contract, that an anonymous visitor lands on sign-in, that
 sixth failed sign-in is locked out (against a throwaway address, never a real
 account), and that an unsigned webhook is refused.
 
+Every pull request runs lint, typecheck and the unit suite, and builds the Docker
+image, in `.github/workflows/ci.yml`. The e2e suite is not part of it: it needs a real
+database and Resend credentials.
+
 ## Docker
 
 Build and run locally:

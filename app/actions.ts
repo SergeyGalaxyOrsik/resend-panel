@@ -854,10 +854,10 @@ export async function discardWebhookDeliveryAction(_prev: AuthState, formData: F
 
   await markDeliveryStatus(delivery.id, "discarded", delivery.error)
   await recordAudit({
-    action: "webhook.retried",
+    action: "webhook.discarded",
     actor: owner,
     target: delivery.kind,
-    metadata: { deliveryId: delivery.id, discarded: true },
+    metadata: { deliveryId: delivery.id, attempts: delivery.attempts },
   })
 
   revalidatePath("/webhooks")

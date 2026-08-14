@@ -277,7 +277,8 @@
       "mailboxCreated": "已创建邮箱",
       "mailboxUpdated": "已重命名邮箱",
       "mailboxDeleted": "已删除邮箱",
-      "webhookRetried": "已重试 Webhook"
+      "webhookRetried": "已重试 Webhook",
+      "webhookDiscarded": "已丢弃 Webhook"
     }
   },
   "webhooks": {

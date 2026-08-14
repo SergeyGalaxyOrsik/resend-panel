@@ -141,11 +141,13 @@ export async function clearThrottle(keys: ThrottleKey[]) {
 /** Drops counters whose window closed and whose lock expired. */
 export async function purgeExpiredThrottles(now = new Date()) {
   const cutoff = new Date(now.getTime() - ATTEMPT_WINDOW_MS).toISOString()
+  // The timestamp is quoted: a PostgREST `or` value carrying dots and colons is
+  // only unambiguous inside quotes.
   await supabase
     .from("login_throttle")
     .delete()
     .lt("last_attempt_at", cutoff)
-    .or(`locked_until.is.null,locked_until.lt.${now.toISOString()}`)
+    .or(`locked_until.is.null,locked_until.lt."${now.toISOString()}"`)
 }
 
 function delay(ms: number) {

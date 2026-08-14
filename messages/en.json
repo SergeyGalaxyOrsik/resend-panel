@@ -277,7 +277,8 @@
       "mailboxCreated": "Mailbox created",
       "mailboxUpdated": "Mailbox renamed",
       "mailboxDeleted": "Mailbox deleted",
-      "webhookRetried": "Webhook retried"
+      "webhookRetried": "Webhook retried",
+      "webhookDiscarded": "Webhook discarded"
     }
   },
   "webhooks": {

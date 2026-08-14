@@ -34,6 +34,7 @@ const ACTION_LABEL_KEYS: Record<AuditAction, string> = {
   "mailbox.updated": "mailboxUpdated",
   "mailbox.deleted": "mailboxDeleted",
   "webhook.retried": "webhookRetried",
+  "webhook.discarded": "webhookDiscarded",
 }
 
 /** Actions that took something away read differently from ones that added. */
@@ -43,6 +44,7 @@ const DESTRUCTIVE_ACTIONS = new Set<AuditAction>([
   "user.deleted",
   "mailbox.deleted",
   "auth.sessions_revoked",
+  "webhook.discarded",
 ])
 
 type AuditTableProps = {

@@ -277,7 +277,8 @@
       "mailboxCreated": "Ящик создан",
       "mailboxUpdated": "Ящик переименован",
       "mailboxDeleted": "Ящик удалён",
-      "webhookRetried": "Вебхук переотправлен"
+      "webhookRetried": "Вебхук переотправлен",
+      "webhookDiscarded": "Вебхук отклонён"
     }
   },
   "webhooks": {

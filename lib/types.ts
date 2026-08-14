@@ -212,6 +212,7 @@ export type AuditAction =
   | "mailbox.updated"
   | "mailbox.deleted"
   | "webhook.retried"
+  | "webhook.discarded"
 
 export type AuditEntry = {
   id: ID

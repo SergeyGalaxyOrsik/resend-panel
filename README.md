@@ -80,7 +80,7 @@ Configure `.env`:
 | `SUPABASE_URL` | Yes | Hosted Supabase project URL |
 | `SUPABASE_SECRET_KEY` | Yes | Server-only secret key (`SUPABASE_SERVICE_KEY` also supported) |
 | `DATABASE_URL` | Migrations | Postgres URI for `bun run migrate` and Docker startup migrations. Use the **session pooler** string (Supabase → Connect → Session pooler): the direct `db.<ref>.supabase.co` host is IPv6-only and fails on IPv4-only networks |
-| `APP_SECRET` | Yes | Encryption key. Generate with `openssl rand -hex 32` |
+| `APP_SECRET` | Yes | Encryption key, minimum 32 characters. Generate with `openssl rand -hex 32`. Checked at startup: in production the server refuses to boot when it is missing, still the placeholder, too short, or too repetitive |
 | `RESEND_INBOUND_WEBHOOK_SECRET` | Prod | Signing secret for webhook → `/api/inbound` (`email.received`) |
 | `RESEND_EVENTS_WEBHOOK_SECRET` | Prod | Signing secret for webhook → `/api/events` (delivered, opened, …) |
 | `RESEND_WEBHOOK_SECRET` | Optional | Legacy fallback if both webhooks share one secret |

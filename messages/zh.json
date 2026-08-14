@@ -184,6 +184,7 @@
     "threadNotFound": "未找到对话。",
     "addRecipient": "请至少添加一位收件人。",
     "messageSent": "消息已发送。",
+    "sendInProgress": "该邮件正在发送中，请稍候再试。",
     "settingsSaved": "已为 {email} 保存设置。",
     "syncCompleted": "从 Resend 新导入 {imported} 条并更新 {backfilled} 条已有消息（账户中共 {sent} 条已发送，{received} 条入站）。",
     "accountDeactivated": "该账户已被停用。",

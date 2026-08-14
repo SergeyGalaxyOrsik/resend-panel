@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import type { AuthState, Mailbox } from "@/lib/types"
 import { FileAttachments } from "@/components/file-attachments"
+import { IdempotencyKeyField } from "@/components/idempotency-key-field"
 
 type Action = (prevState: AuthState, formData: FormData) => Promise<AuthState>
 
@@ -57,6 +58,7 @@ export function EmailComposer({
 
   return (
     <form action={formAction} className="overflow-hidden rounded-xl border bg-card">
+      <IdempotencyKeyField />
       {threadId ? <input type="hidden" name="threadId" value={threadId} /> : null}
       {draftId ? <input type="hidden" name="draftId" value={draftId} /> : null}
       {replyToMessageId ? (

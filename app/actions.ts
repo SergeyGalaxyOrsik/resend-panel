@@ -30,6 +30,7 @@ import {
   renderThreadSubject,
 } from "@/lib/email"
 import {
+  createToken,
   encryptSecret,
   generateTemporaryPassword,
   hashPassword,
@@ -78,6 +79,12 @@ import {
   registerFailure,
 } from "@/lib/rate-limit"
 import { recordAudit } from "@/lib/audit"
+import {
+  completeSendKey,
+  purgeOldSendReceipts,
+  releaseSendKey,
+  reserveSendKey,
+} from "@/lib/idempotency"
 import { getClientAddress } from "@/lib/request"
 import { mapResendEventType } from "@/lib/webhooks"
 import { syncResendHistory } from "@/lib/resend-sync"
@@ -385,6 +392,8 @@ async function sendMessage(
     replyToMessageId?: string
     references?: string[]
     attachmentIds?: string[]
+    /** Passed to Resend so their side also refuses to deliver the same send twice. */
+    idempotencyKey?: string
   }
 ) {
   const t = await getTranslations("errors")
@@ -451,6 +460,7 @@ async function sendMessage(
       headers: {
         Authorization: `Bearer ${settingsToken}`,
         "Content-Type": "application/json",
+        ...(payload.idempotencyKey ? { "Idempotency-Key": payload.idempotencyKey } : {}),
       },
       body: JSON.stringify({
         from,
@@ -517,6 +527,10 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
   const draftId = readField(formData, "draftId") || undefined
   const mailboxId = readField(formData, "mailboxId")
   const attachmentIds = formData.getAll("attachmentIds") as string[]
+  // Minted once per composer, so every retry of the same message carries the same
+  // key. A form without one (no JavaScript yet, an old tab) still sends, it just
+  // gets no protection beyond this request.
+  const idempotencyKey = readField(formData, "idempotencyKey") || createToken("send")
 
   if (!subject && intent !== "save") {
     return { error: t("subjectRequired") }
@@ -585,6 +599,18 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
 
   await requireAtLeastOneRecipient(finalRecipients)
 
+  // Reserved before the API call: whoever wins the insert sends, everyone else
+  // is answered from the row.
+  const reservation = await reserveSendKey(idempotencyKey, { workspaceId: workspace.id, userId: user.id })
+  if (reservation.status === "duplicate") {
+    const { receipt } = reservation
+    if (!receipt.messageId) {
+      return { error: t("sendInProgress") }
+    }
+
+    redirect(receipt.threadId ? `/inbox/${receipt.threadId}` : "/sent")
+  }
+
   const settingsToken = getResendToken(settings?.tokenEncrypted)
   const result = await sendMessage(workspace.id, settingsToken, settings, mailbox, {
     subject: finalSubject,
@@ -596,11 +622,21 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
     replyToMessageId: replyTarget,
     references,
     attachmentIds,
+    idempotencyKey,
   })
 
   if (result.error) {
+    // Freed so the composer can try again with the same key, which Resend then
+    // recognises if the first attempt did reach them.
+    await releaseSendKey(idempotencyKey)
     return { error: result.error }
   }
+
+  if (result.messageId) {
+    await completeSendKey(idempotencyKey, { messageId: result.messageId, threadId: finalThreadId })
+  }
+
+  await purgeOldSendReceipts()
 
   if (draftId) {
     await deleteDraft(draftId, user.id)

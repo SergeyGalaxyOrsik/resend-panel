@@ -184,6 +184,7 @@
     "threadNotFound": "Thread not found.",
     "addRecipient": "Add at least one recipient.",
     "messageSent": "Message sent.",
+    "sendInProgress": "That message is already on its way. Give it a moment before trying again.",
     "settingsSaved": "Settings saved for {email}.",
     "syncCompleted": "Imported {imported} new and updated {backfilled} existing messages from Resend ({sent} sent, {received} received in account).",
     "accountDeactivated": "This account has been deactivated.",

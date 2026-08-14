@@ -22,6 +22,7 @@ import {
   Trash2Icon,
 } from "lucide-react"
 import { composeAction } from "@/app/actions"
+import { IdempotencyKeyField } from "@/components/idempotency-key-field"
 import {
   deleteForeverAction,
   setArchivedAction,
@@ -397,6 +398,7 @@ function ReplyBox({
 
   return (
     <form action={formAction} className="mt-4 rounded-xl border bg-card p-3 md:p-4">
+      <IdempotencyKeyField />
       <input type="hidden" name="threadId" value={threadId} />
       <input type="hidden" name="subject" value={subject} />
       {mailboxId ? <input type="hidden" name="mailboxId" value={mailboxId} /> : null}

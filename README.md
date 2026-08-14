@@ -19,6 +19,8 @@ bulk actions, keyboard shortcuts and a sandboxed message reader.
 - **Compose & drafts** — send through the Resend API, save and resume drafts
 - **Delivery stats** — sent, delivered, opened, clicked, failed metrics
 - **Settings** — encrypted Resend API token storage, connection test, sender identity config
+- **Exactly-once sending** — every send carries an idempotency key, replayed locally and
+  passed to Resend, so a double-click or a timed-out request cannot deliver twice
 - **Sessions per device** — signing in on a second device no longer kicks the first one
   out; a password change drops every other session, and "sign out everywhere" drops them all
 - **Audit log** — every change to accounts, mailboxes and the Resend credentials is

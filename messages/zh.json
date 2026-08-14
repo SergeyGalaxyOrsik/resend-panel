@@ -168,6 +168,7 @@
     "passwordMinLength": "密码至少需要 8 个字符。",
     "passwordsDoNotMatch": "两次输入的密码不一致。",
     "invalidCredentials": "邮箱或密码无效。",
+    "tooManyAttempts": "失败次数过多，请在 {minutes} 分钟后重试。",
     "workspaceMissing": "工作区不存在。",
     "addResendToken": "请先添加 Resend API 令牌。",
     "connectionFailed": "连接失败（{status}）。",

@@ -19,6 +19,8 @@ bulk actions, keyboard shortcuts and a sandboxed message reader.
 - **Compose & drafts** — send through the Resend API, save and resume drafts
 - **Delivery stats** — sent, delivered, opened, clicked, failed metrics
 - **Settings** — encrypted Resend API token storage, connection test, sender identity config
+- **Login throttling** — failed sign-ins are counted per email and per client address, and
+  lock out with a doubling delay, so a password cannot be guessed at machine speed
 - **Light and dark themes** — follows the system by default
 
 ### Keyboard shortcuts

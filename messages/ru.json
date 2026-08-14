@@ -168,6 +168,7 @@
     "passwordMinLength": "Пароль должен содержать не менее 8 символов.",
     "passwordsDoNotMatch": "Пароли не совпадают.",
     "invalidCredentials": "Неверный email или пароль.",
+    "tooManyAttempts": "Слишком много неудачных попыток. Повторите через {minutes, plural, one {# минуту} few {# минуты} many {# минут} other {# минуты}}.",
     "workspaceMissing": "Рабочая область не найдена.",
     "addResendToken": "Сначала добавьте API-токен Resend.",
     "connectionFailed": "Ошибка подключения ({status}).",

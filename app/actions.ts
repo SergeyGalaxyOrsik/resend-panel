@@ -64,6 +64,16 @@ import {
   updateResendSettings,
   updateUserPassword,
 } from "@/lib/store"
+import {
+  addressKey,
+  checkThrottle,
+  clearThrottle,
+  emailKey,
+  passwordChangeKey,
+  purgeExpiredThrottles,
+  registerFailure,
+} from "@/lib/rate-limit"
+import { getClientAddress } from "@/lib/request"
 import { mapResendEventType } from "@/lib/webhooks"
 import { syncResendHistory } from "@/lib/resend-sync"
 import type { AuthState, CreateUserState, Mailbox } from "@/lib/types"
@@ -120,14 +130,34 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
     return { error: t("emailPasswordRequired") }
   }
 
+  const address = await getClientAddress()
+  const keys = [emailKey(email), ...(address ? [addressKey(address)] : [])]
+
+  // Checked before the password is looked at, so a locked account costs an
+  // attacker one query and tells them nothing about the password.
+  const throttle = await checkThrottle(keys)
+  if (throttle.locked) {
+    return { error: t("tooManyAttempts", { minutes: throttle.retryAfterMinutes }) }
+  }
+
   const user = await verifyLogin(email, password)
   if (!user) {
-    return { error: t("invalidCredentials") }
+    const failure = await registerFailure(keys)
+    return {
+      error: failure.locked
+        ? t("tooManyAttempts", { minutes: failure.retryAfterMinutes })
+        : t("invalidCredentials"),
+    }
   }
 
   if (!user.isActive) {
+    // A deactivated account is still a correct password, so it is not a failure
+    // to count: locking it out would only punish the person who was disabled.
     return { error: t("accountDeactivated") }
   }
+
+  await clearThrottle(keys)
+  await purgeExpiredThrottles()
 
   await clearSession()
   await establishSession(user.id)
@@ -146,9 +176,24 @@ export async function changePasswordAction(_prev: AuthState, formData: FormData)
     return { error: t("emailPasswordRequired") }
   }
 
-  if (!verifyPassword(currentPassword, user.passwordHash)) {
-    return { error: t("currentPasswordInvalid") }
+  // Same counter as login: this form also checks a password, so it is the same
+  // door with a different handle.
+  const throttleKeys = [passwordChangeKey(user.id)]
+  const throttle = await checkThrottle(throttleKeys)
+  if (throttle.locked) {
+    return { error: t("tooManyAttempts", { minutes: throttle.retryAfterMinutes }) }
   }
+
+  if (!verifyPassword(currentPassword, user.passwordHash)) {
+    const failure = await registerFailure(throttleKeys)
+    return {
+      error: failure.locked
+        ? t("tooManyAttempts", { minutes: failure.retryAfterMinutes })
+        : t("currentPasswordInvalid"),
+    }
+  }
+
+  await clearThrottle(throttleKeys)
 
   if (password.length < 8) {
     return { error: t("passwordMinLength") }

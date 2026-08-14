@@ -168,6 +168,7 @@
     "passwordMinLength": "Password must be at least 8 characters.",
     "passwordsDoNotMatch": "Passwords do not match.",
     "invalidCredentials": "Invalid email or password.",
+    "tooManyAttempts": "Too many failed attempts. Try again in {minutes, plural, =1 {1 minute} other {# minutes}}.",
     "workspaceMissing": "Workspace is missing.",
     "addResendToken": "Add your Resend API token first.",
     "connectionFailed": "Connection failed ({status}).",

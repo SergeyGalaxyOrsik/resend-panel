@@ -227,6 +227,24 @@ export type AuditEntry = {
   createdAt: Timestamp
 }
 
+export type WebhookDeliveryKind = "inbound" | "events"
+
+export type WebhookDeliveryStatus = "failed" | "resolved" | "discarded"
+
+/** A webhook whose processing failed, kept whole so it can be replayed. */
+export type WebhookDelivery = {
+  id: ID
+  kind: WebhookDeliveryKind
+  externalId: string | null
+  status: WebhookDeliveryStatus
+  payload: Record<string, unknown>
+  error: string
+  attempts: number
+  createdAt: Timestamp
+  updatedAt: Timestamp
+  resolvedAt: Timestamp | null
+}
+
 export type Attachment = {
   id: ID
   messageId: ID | null

@@ -50,6 +50,7 @@
     "users": "Users",
     "mailboxes": "Mailboxes",
     "audit": "Audit log",
+    "webhooks": "Webhook failures",
     "insights": "Insights",
     "changePassword": "Change password",
     "administration": "Administration"
@@ -206,7 +207,10 @@
     "noMailboxAssigned": "No mailbox is assigned to you.",
     "mailboxCreated": "Mailbox {address} created.",
     "mailboxUpdated": "Mailbox {address} updated.",
-    "mailboxDeleted": "Mailbox {address} deleted."
+    "mailboxDeleted": "Mailbox {address} deleted.",
+    "webhookDeliveryNotFound": "That delivery is no longer in the queue.",
+    "webhookRetried": "Delivery processed.",
+    "webhookDiscarded": "Delivery discarded."
   },
   "users": {
     "title": "Users",
@@ -274,6 +278,24 @@
       "mailboxUpdated": "Mailbox renamed",
       "mailboxDeleted": "Mailbox deleted",
       "webhookRetried": "Webhook retried"
+    }
+  },
+  "webhooks": {
+    "title": "Webhook failures",
+    "description": "Deliveries that could not be processed, kept with their payload so they can be replayed",
+    "empty": "No failed deliveries. Anything Resend sends that this panel cannot process shows up here.",
+    "retry": "Retry",
+    "discard": "Discard",
+    "showPayload": "Payload",
+    "attempts": "{count, plural, =1 {1 attempt} other {# attempts}}",
+    "kind": {
+      "inbound": "Inbound mail",
+      "events": "Delivery event"
+    },
+    "status": {
+      "failed": "Failed",
+      "resolved": "Resolved",
+      "discarded": "Discarded"
     }
   },
   "mailboxes": {

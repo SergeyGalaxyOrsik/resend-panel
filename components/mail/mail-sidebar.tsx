@@ -7,6 +7,7 @@ import {
   ArchiveIcon,
   AtSignIcon,
   ScrollTextIcon,
+  WebhookIcon,
   ChartNoAxesColumnIcon,
   FileEditIcon,
   GaugeIcon,
@@ -72,6 +73,7 @@ export function MailSidebar({ counts, isOwner }: MailSidebarProps) {
     { href: "/users", label: tn("users"), icon: UsersIcon },
     { href: "/mailboxes", label: tn("mailboxes"), icon: AtSignIcon },
     { href: "/audit", label: tn("audit"), icon: ScrollTextIcon },
+    { href: "/webhooks", label: tn("webhooks"), icon: WebhookIcon },
     { href: "/settings", label: tn("settings"), icon: Settings2Icon },
   ] as const
 

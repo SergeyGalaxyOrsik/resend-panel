@@ -19,6 +19,8 @@ bulk actions, keyboard shortcuts and a sandboxed message reader.
 - **Compose & drafts** — send through the Resend API, save and resume drafts
 - **Delivery stats** — sent, delivered, opened, clicked, failed metrics
 - **Settings** — encrypted Resend API token storage, connection test, sender identity config
+- **Webhook dead letters** — a delivery that fails to process is stored whole, with its
+  payload, and can be replayed or discarded from an owner-only page
 - **Exactly-once sending** — every send carries an idempotency key, replayed locally and
   passed to Resend, so a double-click or a timed-out request cannot deliver twice
 - **Sessions per device** — signing in on a second device no longer kicks the first one
@@ -92,6 +94,9 @@ Configure `.env`:
 | `RESEND_INBOUND_WEBHOOK_SECRET` | Prod | Signing secret for webhook → `/api/inbound` (`email.received`) |
 | `RESEND_EVENTS_WEBHOOK_SECRET` | Prod | Signing secret for webhook → `/api/events` (delivered, opened, …) |
 | `RESEND_WEBHOOK_SECRET` | Optional | Legacy fallback if both webhooks share one secret |
+| `LOG_LEVEL` | Optional | `debug`, `info`, `warn` or `error`. Defaults to `info` in production, `debug` elsewhere |
+| `LOG_FORMAT` | Optional | `json` forces one JSON record per line. Already the default in production |
+| `SENTRY_DSN` | Optional | With a DSN set, webhook and request failures are reported to Sentry as well as logged |
 
 Apply schema manually or via Docker (migrations run automatically on container start):
 
@@ -171,6 +176,12 @@ deliveries.
 > stored as events and show up in the activity feed, but the message keeps the status it
 > already had.
 
+> [!NOTE]
+> A delivery that fails to process is not lost. The raw payload is stored in
+> `webhook_deliveries` and listed under **Webhook failures**, where it can be replayed
+> once the cause is fixed. Replaying inbound mail is safe: a message id the panel has
+> already recorded is answered as a duplicate rather than filed twice.
+
 > [!TIP]
 > Seeing `{"ignored":true,"reason":"message not found"}` on a subscribed event is normal for
 > mail this install did not send. Events are matched to messages by the Resend message id,
@@ -207,7 +218,7 @@ app/
 │   ├── search/             # results for the global search box
 │   ├── thread/[threadId]/  # the one reader, ?from= decides where "back" goes
 │   ├── drafts/, compose/, dashboard/, statistics/
-│   └── settings/, users/, mailboxes/, audit/   # owner only
+│   └── settings/, users/, mailboxes/, audit/, webhooks/   # owner only
 ├── mail-actions.ts         # star / archive / trash / read mutations
 ├── api/inbound/            # Inbound email webhook
 ├── api/events/             # Delivery/open/click events

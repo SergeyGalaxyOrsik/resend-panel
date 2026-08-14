@@ -50,6 +50,7 @@
     "users": "用户",
     "mailboxes": "邮箱地址",
     "audit": "审计日志",
+    "webhooks": "Webhook 失败",
     "insights": "分析",
     "changePassword": "修改密码",
     "administration": "管理"
@@ -206,7 +207,10 @@
     "noMailboxAssigned": "尚未为您分配邮箱地址。",
     "mailboxCreated": "已创建邮箱地址 {address}。",
     "mailboxUpdated": "已更新邮箱地址 {address}。",
-    "mailboxDeleted": "已删除邮箱地址 {address}。"
+    "mailboxDeleted": "已删除邮箱地址 {address}。",
+    "webhookDeliveryNotFound": "该投递已不在队列中。",
+    "webhookRetried": "投递已处理。",
+    "webhookDiscarded": "投递已丢弃。"
   },
   "users": {
     "title": "用户",
@@ -274,6 +278,24 @@
       "mailboxUpdated": "已重命名邮箱",
       "mailboxDeleted": "已删除邮箱",
       "webhookRetried": "已重试 Webhook"
+    }
+  },
+  "webhooks": {
+    "title": "Webhook 失败",
+    "description": "无法处理的投递，连同请求体一起保存，可重新处理",
+    "empty": "没有失败的投递。Resend 发来但面板无法处理的内容会显示在这里。",
+    "retry": "重试",
+    "discard": "丢弃",
+    "showPayload": "请求体",
+    "attempts": "{count} 次尝试",
+    "kind": {
+      "inbound": "接收邮件",
+      "events": "投递事件"
+    },
+    "status": {
+      "failed": "失败",
+      "resolved": "已处理",
+      "discarded": "已丢弃"
     }
   },
   "mailboxes": {

@@ -50,6 +50,7 @@
     "users": "Пользователи",
     "mailboxes": "Адреса",
     "audit": "Журнал аудита",
+    "webhooks": "Сбои вебхуков",
     "insights": "Аналитика",
     "changePassword": "Сменить пароль",
     "administration": "Администрирование"
@@ -206,7 +207,10 @@
     "noMailboxAssigned": "Вам не назначен ни один адрес.",
     "mailboxCreated": "Адрес {address} создан.",
     "mailboxUpdated": "Адрес {address} обновлён.",
-    "mailboxDeleted": "Адрес {address} удалён."
+    "mailboxDeleted": "Адрес {address} удалён.",
+    "webhookDeliveryNotFound": "Этой доставки больше нет в очереди.",
+    "webhookRetried": "Доставка обработана.",
+    "webhookDiscarded": "Доставка отклонена."
   },
   "users": {
     "title": "Пользователи",
@@ -274,6 +278,24 @@
       "mailboxUpdated": "Ящик переименован",
       "mailboxDeleted": "Ящик удалён",
       "webhookRetried": "Вебхук переотправлен"
+    }
+  },
+  "webhooks": {
+    "title": "Сбои вебхуков",
+    "description": "Доставки, которые не удалось обработать: сохранены вместе с телом запроса и могут быть переотправлены",
+    "empty": "Сбоев нет. Сюда попадёт всё, что Resend прислал, а панель не смогла обработать.",
+    "retry": "Повторить",
+    "discard": "Отклонить",
+    "showPayload": "Тело запроса",
+    "attempts": "{count, plural, one {# попытка} few {# попытки} many {# попыток} other {# попытки}}",
+    "kind": {
+      "inbound": "Входящее письмо",
+      "events": "Событие доставки"
+    },
+    "status": {
+      "failed": "Ошибка",
+      "resolved": "Обработано",
+      "discarded": "Отклонено"
     }
   },
   "mailboxes": {

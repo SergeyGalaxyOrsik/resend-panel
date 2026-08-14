@@ -79,6 +79,12 @@ import {
   registerFailure,
 } from "@/lib/rate-limit"
 import { recordAudit } from "@/lib/audit"
+import { logger } from "@/lib/logger"
+import {
+  bumpAttempts,
+  findDelivery,
+  markDeliveryStatus,
+} from "@/lib/webhook-deliveries"
 import {
   completeSendKey,
   purgeOldSendReceipts,
@@ -688,7 +694,7 @@ export async function inboundWebhookAction(requestBody: unknown) {
   let html = payload.html
   let text = payload.text
   if ((!html || !text) && payload.emailId) {
-    console.log("[inbound] html/text empty, fetching from Resend API for email_id:", payload.emailId)
+    logger.debug("inbound.body_missing", { emailId: payload.emailId })
     const settings = await getCurrentSettings()
     const token = getResendToken(settings?.tokenEncrypted)
     if (token) {
@@ -696,12 +702,16 @@ export async function inboundWebhookAction(requestBody: unknown) {
       if (emailData) {
         html = html || emailData.html
         text = text || emailData.text
-        console.log("[inbound] fetched from API - html:", html?.length || 0, "chars, text:", text?.length || 0, "chars")
+        logger.debug("inbound.body_fetched", {
+          emailId: payload.emailId,
+          htmlLength: html?.length ?? 0,
+          textLength: text?.length ?? 0,
+        })
       } else {
-        console.log("[inbound] fetchResendEmail returned null")
+        logger.warn("inbound.body_fetch_empty", { emailId: payload.emailId })
       }
     } else {
-      console.log("[inbound] no Resend token configured")
+      logger.warn("inbound.token_missing", { emailId: payload.emailId })
     }
   }
 
@@ -778,6 +788,80 @@ export async function resendEventWebhookAction(requestBody: unknown) {
   revalidatePath("/dashboard")
 
   return { processed: true, type: mapped }
+}
+
+// ── Webhook dead letters (owner only) ──────────────────────
+
+/**
+ * Replays a stored payload through the same handler that failed on it. Inbound
+ * mail is safe to replay: the handler recognises a message id it has already
+ * recorded and answers `duplicate` instead of filing a second copy.
+ */
+export async function retryWebhookDeliveryAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const t = await getTranslations("errors")
+  const owner = await requireOwner()
+
+  const deliveryId = readField(formData, "deliveryId")
+  const delivery = deliveryId ? await findDelivery(deliveryId) : null
+
+  if (!delivery) {
+    return { error: t("webhookDeliveryNotFound") }
+  }
+
+  try {
+    if (delivery.kind === "inbound") {
+      await inboundWebhookAction(delivery.payload)
+    } else {
+      await resendEventWebhookAction(delivery.payload)
+    }
+
+    await markDeliveryStatus(delivery.id, "resolved")
+    await recordAudit({
+      action: "webhook.retried",
+      actor: owner,
+      target: delivery.kind,
+      metadata: { deliveryId: delivery.id, attempts: delivery.attempts + 1 },
+    })
+
+    logger.info("webhook.retry_succeeded", { kind: delivery.kind, deliveryId: delivery.id })
+
+    revalidatePath("/webhooks")
+    revalidatePath("/inbox")
+    revalidatePath("/statistics")
+    return { success: t("webhookRetried") }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : t("unknownError")
+    await bumpAttempts(delivery.id, delivery.attempts + 1)
+    await markDeliveryStatus(delivery.id, "failed", reason)
+    logger.warn("webhook.retry_failed", { kind: delivery.kind, deliveryId: delivery.id, reason })
+
+    revalidatePath("/webhooks")
+    return { error: reason }
+  }
+}
+
+/** Takes a delivery out of the queue without replaying it. The row is kept. */
+export async function discardWebhookDeliveryAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const t = await getTranslations("errors")
+  const owner = await requireOwner()
+
+  const deliveryId = readField(formData, "deliveryId")
+  const delivery = deliveryId ? await findDelivery(deliveryId) : null
+
+  if (!delivery) {
+    return { error: t("webhookDeliveryNotFound") }
+  }
+
+  await markDeliveryStatus(delivery.id, "discarded", delivery.error)
+  await recordAudit({
+    action: "webhook.retried",
+    actor: owner,
+    target: delivery.kind,
+    metadata: { deliveryId: delivery.id, discarded: true },
+  })
+
+  revalidatePath("/webhooks")
+  return { success: t("webhookDiscarded") }
 }
 
 // ── User administration (owner only) ───────────────────────

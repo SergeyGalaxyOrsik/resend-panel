@@ -195,6 +195,21 @@ and Postgres is answering, and `503` with `{"status":"degraded"}` when either ch
 fails. The reason stays out of the response, because the route is unauthenticated, and
 is written to the log instead. The Docker image uses it as its `HEALTHCHECK`.
 
+## Tests
+
+```bash
+bun run test        # unit tests (Vitest)
+bun run typecheck   # tsc --noEmit
+bun run lint        # eslint
+```
+
+The unit suite covers the parts where a mistake is expensive and invisible: the
+inbound HTML sanitizer, password hashing and secret encryption, webhook signature
+verification, the login throttle policy, and the mailbox scoping that keeps one
+member out of another's mail. That last one matters most: the server talks to
+Supabase with the secret key, so a query that forgets its scope is not stopped by
+anything in the database.
+
 ## Docker
 
 Build and run locally:

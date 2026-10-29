@@ -610,6 +610,42 @@ export async function getThreadWithMessages(workspaceId: string, threadId: strin
   }
 }
 
+// ── Bulk reads ─────────────────────────────────────────────
+
+/**
+ * PostgREST caps every response at `max_rows` (1000 on hosted Supabase) and drops
+ * the rest without an error, and a long `in(...)` list can overflow the request
+ * URL. Bulk reads therefore go through here: ids in chunks, each chunk paged
+ * until a short page says it is exhausted. `page` must order by a unique column,
+ * or rows can repeat or vanish across page boundaries.
+ */
+const ID_CHUNK_SIZE = 150
+const PAGE_SIZE = 1000
+
+async function selectAllByIds<Row>(
+  ids: string[],
+  page: (
+    chunk: string[],
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: Row[] | null; error: { message: string } | null }>
+): Promise<Row[]> {
+  const rows: Row[] = []
+
+  for (let start = 0; start < ids.length; start += ID_CHUNK_SIZE) {
+    const chunk = ids.slice(start, start + ID_CHUNK_SIZE)
+
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error } = await page(chunk, from, from + PAGE_SIZE - 1)
+      if (error) throw new Error(error.message)
+      rows.push(...(data || []))
+      if (!data || data.length < PAGE_SIZE) break
+    }
+  }
+
+  return rows
+}
+
 // ── Folders (Gmail-style state) ────────────────────────────
 
 type ThreadFilter = { eq(column: string, value: unknown): ThreadFilter }
@@ -673,19 +709,19 @@ export async function listThreadSummaries(
 
   const threadIds = threads.map((thread) => thread.id)
 
-  let messageQuery = supabase
-    .from("messages")
-    .select("id, thread_id, text, from_email, to, direction, is_read, created_at, sent_at, received_at")
-    .eq("workspace_id", workspaceId)
-    .in("thread_id", threadIds)
+  const messageRows = await selectAllByIds(threadIds, (chunk, from, to) => {
+    let messageQuery = supabase
+      .from("messages")
+      .select("id, thread_id, text, from_email, to, direction, is_read, created_at, sent_at, received_at")
+      .eq("workspace_id", workspaceId)
+      .in("thread_id", chunk)
 
-  if (allowed) messageQuery = messageQuery.in("mailbox_id", allowed)
+    if (allowed) messageQuery = messageQuery.in("mailbox_id", allowed)
 
-  const { data: messageRows } = await messageQuery
+    return messageQuery.order("id").range(from, to)
+  })
 
-  const withAttachments = await messageIdsWithAttachments(
-    (messageRows || []).map((row) => row.id as string)
-  )
+  const withAttachments = await messageIdsWithAttachments(messageRows.map((row) => row.id as string))
 
   type Latest = { at: number; snippet: string; correspondent: string }
   const stats = new Map<
@@ -693,7 +729,7 @@ export async function listThreadSummaries(
     { unread: number; count: number; attachments: boolean; latest: Latest | null }
   >()
 
-  for (const row of messageRows || []) {
+  for (const row of messageRows) {
     const threadId = row.thread_id as string
     const entry = stats.get(threadId) ?? { unread: 0, count: 0, attachments: false, latest: null }
 
@@ -763,12 +799,11 @@ async function threadIdsWithOutbound(workspaceId: string, scope?: MailboxScope) 
 async function messageIdsWithAttachments(messageIds: string[]) {
   if (!messageIds.length) return new Set<string>()
 
-  const { data } = await supabase
-    .from("attachments")
-    .select("message_id")
-    .in("message_id", messageIds)
+  const rows = await selectAllByIds(messageIds, (chunk, from, to) =>
+    supabase.from("attachments").select("id, message_id").in("message_id", chunk).order("id").range(from, to)
+  )
 
-  return new Set((data || []).map((row) => row.message_id as string).filter(Boolean))
+  return new Set(rows.map((row) => row.message_id as string).filter(Boolean))
 }
 
 /** Badge numbers for the folder rail. Inbox counts unread; the rest count threads. */

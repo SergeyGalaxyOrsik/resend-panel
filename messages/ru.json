@@ -46,8 +46,11 @@
     "statistics": "Статистика",
     "settings": "Настройки",
     "logOut": "Выйти",
+    "signOutEverywhere": "Выйти на всех устройствах",
     "users": "Пользователи",
     "mailboxes": "Адреса",
+    "audit": "Журнал аудита",
+    "webhooks": "Сбои вебхуков",
     "insights": "Аналитика",
     "changePassword": "Сменить пароль",
     "administration": "Администрирование"
@@ -168,6 +171,7 @@
     "passwordMinLength": "Пароль должен содержать не менее 8 символов.",
     "passwordsDoNotMatch": "Пароли не совпадают.",
     "invalidCredentials": "Неверный email или пароль.",
+    "tooManyAttempts": "Слишком много неудачных попыток. Повторите через {minutes, plural, one {# минуту} few {# минуты} many {# минут} other {# минуты}}.",
     "workspaceMissing": "Рабочая область не найдена.",
     "addResendToken": "Сначала добавьте API-токен Resend.",
     "connectionFailed": "Ошибка подключения ({status}).",
@@ -181,6 +185,7 @@
     "threadNotFound": "Переписка не найдена.",
     "addRecipient": "Добавьте хотя бы одного получателя.",
     "messageSent": "Сообщение отправлено.",
+    "sendInProgress": "Это письмо уже отправляется. Подождите немного, прежде чем повторять.",
     "settingsSaved": "Настройки сохранены для {email}.",
     "syncCompleted": "Импортировано {imported} новых и обновлено {backfilled} существующих сообщений из Resend ({sent} отправленных, {received} входящих в аккаунте).",
     "accountDeactivated": "Эта учётная запись деактивирована.",
@@ -202,7 +207,10 @@
     "noMailboxAssigned": "Вам не назначен ни один адрес.",
     "mailboxCreated": "Адрес {address} создан.",
     "mailboxUpdated": "Адрес {address} обновлён.",
-    "mailboxDeleted": "Адрес {address} удалён."
+    "mailboxDeleted": "Адрес {address} удалён.",
+    "webhookDeliveryNotFound": "Этой доставки больше нет в очереди.",
+    "webhookRetried": "Доставка обработана.",
+    "webhookDiscarded": "Доставка отклонена."
   },
   "users": {
     "title": "Пользователи",
@@ -238,6 +246,58 @@
     "save": "Сохранить",
     "cancel": "Отмена",
     "done": "Готово"
+  },
+  "audit": {
+    "title": "Журнал аудита",
+    "description": "Кто менял доступы, ключи и почтовые ящики, новое сверху",
+    "when": "Когда",
+    "actor": "Кто",
+    "action": "Действие",
+    "target": "Объект",
+    "address": "Адрес",
+    "systemActor": "Система",
+    "empty": "Пока пусто. Административные изменения появятся здесь по мере их выполнения.",
+    "previous": "Назад",
+    "next": "Вперёд",
+    "pageOf": "Страница {page} из {pages} · записей: {total}",
+    "actions": {
+      "signedIn": "Вход выполнен",
+      "signInBlocked": "Вход заблокирован",
+      "signedOut": "Выход",
+      "passwordChanged": "Пароль изменён",
+      "sessionsRevoked": "Сессии сброшены",
+      "settingsUpdated": "Настройки обновлены",
+      "tokenUpdated": "Токен Resend заменён",
+      "historySynced": "История синхронизирована",
+      "userCreated": "Пользователь создан",
+      "mailboxesAssigned": "Ящики назначены",
+      "userActivated": "Пользователь активирован",
+      "userDeactivated": "Пользователь отключён",
+      "userDeleted": "Пользователь удалён",
+      "mailboxCreated": "Ящик создан",
+      "mailboxUpdated": "Ящик переименован",
+      "mailboxDeleted": "Ящик удалён",
+      "webhookRetried": "Вебхук переотправлен",
+      "webhookDiscarded": "Вебхук отклонён"
+    }
+  },
+  "webhooks": {
+    "title": "Сбои вебхуков",
+    "description": "Доставки, которые не удалось обработать: сохранены вместе с телом запроса и могут быть переотправлены",
+    "empty": "Сбоев нет. Сюда попадёт всё, что Resend прислал, а панель не смогла обработать.",
+    "retry": "Повторить",
+    "discard": "Отклонить",
+    "showPayload": "Тело запроса",
+    "attempts": "{count, plural, one {# попытка} few {# попытки} many {# попыток} other {# попытки}}",
+    "kind": {
+      "inbound": "Входящее письмо",
+      "events": "Событие доставки"
+    },
+    "status": {
+      "failed": "Ошибка",
+      "resolved": "Обработано",
+      "discarded": "Отклонено"
+    }
   },
   "mailboxes": {
     "title": "Адреса",

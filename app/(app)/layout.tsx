@@ -2,8 +2,8 @@ import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 import type { ReactNode } from "react"
 import { getMailboxScope, requireCurrentUser } from "@/lib/auth"
-import { getCurrentWorkspace, getFolderCounts } from "@/lib/store"
-import { logoutAction } from "@/app/actions"
+import { getCurrentWorkspace, getFolderCounts, listSessionsForUser } from "@/lib/store"
+import { logoutAction, signOutEverywhereAction } from "@/app/actions"
 import { MailShell } from "@/components/mail/mail-shell"
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
@@ -16,6 +16,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
 
   const scope = await getMailboxScope(user, workspace.id)
   const counts = await getFolderCounts(workspace.id, user.id, scope)
+  const sessions = await listSessionsForUser(user.id)
 
   // The sidebar persists its own state in a cookie; reading it here means the rail
   // renders in the right state on the server instead of snapping after hydration.
@@ -29,7 +30,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       workspace={workspace}
       counts={counts}
       defaultSidebarOpen={defaultSidebarOpen}
+      sessionCount={sessions.length}
       logoutAction={logoutAction}
+      signOutEverywhereAction={signOutEverywhereAction}
     >
       {children}
     </MailShell>

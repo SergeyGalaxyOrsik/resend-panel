@@ -45,6 +45,10 @@ export type Session = {
   userId: ID
   createdAt: Timestamp
   expiresAt: Timestamp
+  /** Refreshed at most every few minutes, so it costs one write per device. */
+  lastSeenAt: Timestamp
+  ip: string
+  userAgent: string
 }
 
 export type ResendSettings = {
@@ -184,6 +188,62 @@ export type AuthState = {
 export type CreateUserState = AuthState & {
   createdEmail?: string
   temporaryPassword?: string
+}
+
+/**
+ * Every administrative action worth answering "who did this?" for. The union is
+ * closed so the audit page can label each one instead of printing a raw string.
+ */
+export type AuditAction =
+  | "auth.signed_in"
+  | "auth.sign_in_blocked"
+  | "auth.signed_out"
+  | "auth.password_changed"
+  | "auth.sessions_revoked"
+  | "settings.updated"
+  | "settings.token_updated"
+  | "settings.history_synced"
+  | "user.created"
+  | "user.mailboxes_assigned"
+  | "user.activated"
+  | "user.deactivated"
+  | "user.deleted"
+  | "mailbox.created"
+  | "mailbox.updated"
+  | "mailbox.deleted"
+  | "webhook.retried"
+  | "webhook.discarded"
+
+export type AuditEntry = {
+  id: ID
+  workspaceId: ID | null
+  actorUserId: ID | null
+  /** Kept alongside the id so a deleted account still reads as a name. */
+  actorEmail: string
+  action: AuditAction
+  target: string
+  metadata: Record<string, unknown>
+  ip: string
+  userAgent: string
+  createdAt: Timestamp
+}
+
+export type WebhookDeliveryKind = "inbound" | "events"
+
+export type WebhookDeliveryStatus = "failed" | "resolved" | "discarded"
+
+/** A webhook whose processing failed, kept whole so it can be replayed. */
+export type WebhookDelivery = {
+  id: ID
+  kind: WebhookDeliveryKind
+  externalId: string | null
+  status: WebhookDeliveryStatus
+  payload: Record<string, unknown>
+  error: string
+  attempts: number
+  createdAt: Timestamp
+  updatedAt: Timestamp
+  resolvedAt: Timestamp | null
 }
 
 export type Attachment = {

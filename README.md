@@ -19,6 +19,16 @@ bulk actions, keyboard shortcuts and a sandboxed message reader.
 - **Compose & drafts** — send through the Resend API, save and resume drafts
 - **Delivery stats** — sent, delivered, opened, clicked, failed metrics
 - **Settings** — encrypted Resend API token storage, connection test, sender identity config
+- **Webhook dead letters** — a delivery that fails to process is stored whole, with its
+  payload, and can be replayed or discarded from an owner-only page
+- **Exactly-once sending** — every send carries an idempotency key, replayed locally and
+  passed to Resend, so a double-click or a timed-out request cannot deliver twice
+- **Sessions per device** — signing in on a second device no longer kicks the first one
+  out; a password change drops every other session, and "sign out everywhere" drops them all
+- **Audit log** — every change to accounts, mailboxes and the Resend credentials is
+  recorded with actor, target and client address, on an owner-only page
+- **Login throttling** — failed sign-ins are counted per email and per client address, and
+  lock out with a doubling delay, so a password cannot be guessed at machine speed
 - **Light and dark themes** — follows the system by default
 
 ### Keyboard shortcuts
@@ -80,10 +90,13 @@ Configure `.env`:
 | `SUPABASE_URL` | Yes | Hosted Supabase project URL |
 | `SUPABASE_SECRET_KEY` | Yes | Server-only secret key (`SUPABASE_SERVICE_KEY` also supported) |
 | `DATABASE_URL` | Migrations | Postgres URI for `bun run migrate` and Docker startup migrations. Use the **session pooler** string (Supabase → Connect → Session pooler): the direct `db.<ref>.supabase.co` host is IPv6-only and fails on IPv4-only networks |
-| `APP_SECRET` | Yes | Encryption key. Generate with `openssl rand -hex 32` |
+| `APP_SECRET` | Yes | Encryption key, minimum 32 characters. Generate with `openssl rand -hex 32`. Checked at startup: in production the server refuses to boot when it is missing, still the placeholder, too short, or too repetitive |
 | `RESEND_INBOUND_WEBHOOK_SECRET` | Prod | Signing secret for webhook → `/api/inbound` (`email.received`) |
 | `RESEND_EVENTS_WEBHOOK_SECRET` | Prod | Signing secret for webhook → `/api/events` (delivered, opened, …) |
 | `RESEND_WEBHOOK_SECRET` | Optional | Legacy fallback if both webhooks share one secret |
+| `LOG_LEVEL` | Optional | `debug`, `info`, `warn` or `error`. Defaults to `info` in production, `debug` elsewhere |
+| `LOG_FORMAT` | Optional | `json` forces one JSON record per line. Already the default in production |
+| `SENTRY_DSN` | Optional | With a DSN set, webhook and request failures are reported to Sentry as well as logged |
 
 Apply schema manually or via Docker (migrations run automatically on container start):
 
@@ -163,11 +176,56 @@ deliveries.
 > stored as events and show up in the activity feed, but the message keeps the status it
 > already had.
 
+> [!NOTE]
+> A delivery that fails to process is not lost. The raw payload is stored in
+> `webhook_deliveries` and listed under **Webhook failures**, where it can be replayed
+> once the cause is fixed. Replaying inbound mail is safe: a message id the panel has
+> already recorded is answered as a duplicate rather than filed twice.
+
 > [!TIP]
 > Seeing `{"ignored":true,"reason":"message not found"}` on a subscribed event is normal for
 > mail this install did not send. Events are matched to messages by the Resend message id,
 > which the panel records only for messages it sent itself, so anything sent from another
 > deployment, another database, or straight from the Resend API is acknowledged and dropped.
+
+## Health check
+
+`GET /api/health` answers `200` with `{"status":"ok"}` when the configuration is valid
+and Postgres is answering, and `503` with `{"status":"degraded"}` when either check
+fails. The reason stays out of the response, because the route is unauthenticated, and
+is written to the log instead. The Docker image uses it as its `HEALTHCHECK`.
+
+## Tests
+
+```bash
+bun run test        # unit tests (Vitest)
+bun run typecheck   # tsc --noEmit
+bun run lint        # eslint
+```
+
+The unit suite covers the parts where a mistake is expensive and invisible: the
+inbound HTML sanitizer, password hashing and secret encryption, webhook signature
+verification, the login throttle policy, and the mailbox scoping that keeps one
+member out of another's mail. That last one matters most: the server talks to
+Supabase with the secret key, so a query that forgets its scope is not stopped by
+anything in the database.
+
+End-to-end smoke tests run against a real install, so they need a configured `.env`
+with the migrations applied:
+
+```bash
+bunx playwright install chromium   # once
+bun run test:e2e                   # builds, starts the app, then drives it
+E2E_BASE_URL=https://your-domain bun run test:e2e   # or point at a running deployment
+```
+
+They check the health contract, that an anonymous visitor lands on sign-in, that a
+sixth failed sign-in is locked out (against a throwaway address, never a real
+account), and that an unsigned webhook is refused.
+
+Every pull request runs lint, typecheck and the unit suite, and builds the Docker
+image, in `.github/workflows/ci.yml`. The e2e suite is not part of it: it needs a real
+database and Resend credentials.
 
 ## Docker
 
@@ -199,7 +257,7 @@ app/
 │   ├── search/             # results for the global search box
 │   ├── thread/[threadId]/  # the one reader, ?from= decides where "back" goes
 │   ├── drafts/, compose/, dashboard/, statistics/
-│   └── settings/, users/, mailboxes/           # owner only
+│   └── settings/, users/, mailboxes/, audit/, webhooks/   # owner only
 ├── mail-actions.ts         # star / archive / trash / read mutations
 ├── api/inbound/            # Inbound email webhook
 ├── api/events/             # Delivery/open/click events

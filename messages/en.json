@@ -46,8 +46,11 @@
     "statistics": "Statistics",
     "settings": "Settings",
     "logOut": "Log out",
+    "signOutEverywhere": "Sign out everywhere",
     "users": "Users",
     "mailboxes": "Mailboxes",
+    "audit": "Audit log",
+    "webhooks": "Webhook failures",
     "insights": "Insights",
     "changePassword": "Change password",
     "administration": "Administration"
@@ -168,6 +171,7 @@
     "passwordMinLength": "Password must be at least 8 characters.",
     "passwordsDoNotMatch": "Passwords do not match.",
     "invalidCredentials": "Invalid email or password.",
+    "tooManyAttempts": "Too many failed attempts. Try again in {minutes, plural, =1 {1 minute} other {# minutes}}.",
     "workspaceMissing": "Workspace is missing.",
     "addResendToken": "Add your Resend API token first.",
     "connectionFailed": "Connection failed ({status}).",
@@ -181,6 +185,7 @@
     "threadNotFound": "Thread not found.",
     "addRecipient": "Add at least one recipient.",
     "messageSent": "Message sent.",
+    "sendInProgress": "That message is already on its way. Give it a moment before trying again.",
     "settingsSaved": "Settings saved for {email}.",
     "syncCompleted": "Imported {imported} new and updated {backfilled} existing messages from Resend ({sent} sent, {received} received in account).",
     "accountDeactivated": "This account has been deactivated.",
@@ -202,7 +207,10 @@
     "noMailboxAssigned": "No mailbox is assigned to you.",
     "mailboxCreated": "Mailbox {address} created.",
     "mailboxUpdated": "Mailbox {address} updated.",
-    "mailboxDeleted": "Mailbox {address} deleted."
+    "mailboxDeleted": "Mailbox {address} deleted.",
+    "webhookDeliveryNotFound": "That delivery is no longer in the queue.",
+    "webhookRetried": "Delivery processed.",
+    "webhookDiscarded": "Delivery discarded."
   },
   "users": {
     "title": "Users",
@@ -238,6 +246,58 @@
     "save": "Save",
     "cancel": "Cancel",
     "done": "Done"
+  },
+  "audit": {
+    "title": "Audit log",
+    "description": "Who changed access, credentials and mailboxes, newest first",
+    "when": "When",
+    "actor": "Actor",
+    "action": "Action",
+    "target": "Target",
+    "address": "Address",
+    "systemActor": "System",
+    "empty": "Nothing recorded yet. Administrative changes show up here as they happen.",
+    "previous": "Previous",
+    "next": "Next",
+    "pageOf": "Page {page} of {pages} · {total} entries",
+    "actions": {
+      "signedIn": "Signed in",
+      "signInBlocked": "Sign-in blocked",
+      "signedOut": "Signed out",
+      "passwordChanged": "Password changed",
+      "sessionsRevoked": "Sessions revoked",
+      "settingsUpdated": "Settings updated",
+      "tokenUpdated": "Resend token replaced",
+      "historySynced": "History synced",
+      "userCreated": "User created",
+      "mailboxesAssigned": "Mailboxes assigned",
+      "userActivated": "User activated",
+      "userDeactivated": "User deactivated",
+      "userDeleted": "User deleted",
+      "mailboxCreated": "Mailbox created",
+      "mailboxUpdated": "Mailbox renamed",
+      "mailboxDeleted": "Mailbox deleted",
+      "webhookRetried": "Webhook retried",
+      "webhookDiscarded": "Webhook discarded"
+    }
+  },
+  "webhooks": {
+    "title": "Webhook failures",
+    "description": "Deliveries that could not be processed, kept with their payload so they can be replayed",
+    "empty": "No failed deliveries. Anything Resend sends that this panel cannot process shows up here.",
+    "retry": "Retry",
+    "discard": "Discard",
+    "showPayload": "Payload",
+    "attempts": "{count, plural, =1 {1 attempt} other {# attempts}}",
+    "kind": {
+      "inbound": "Inbound mail",
+      "events": "Delivery event"
+    },
+    "status": {
+      "failed": "Failed",
+      "resolved": "Resolved",
+      "discarded": "Discarded"
+    }
   },
   "mailboxes": {
     "title": "Mailboxes",

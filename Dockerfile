@@ -16,6 +16,14 @@ ENV NODE_ENV=production
 # Next.js 16 + Turbopack requires Node (Bun lacks worker_threads/NAPI support)
 RUN npm run build
 
+# The migration script runs before the server and needs `pg`, which the standalone
+# trace does not include. It gets its own tree under scripts/: running npm inside
+# the standalone output crashes on the partial node_modules Next leaves there.
+FROM node:20-alpine AS migrator
+WORKDIR /migrator
+RUN echo '{"private":true}' > package.json && \
+    npm install --omit=dev --no-audit --no-fund pg@^8.16.3
+
 FROM node:20-alpine AS runner
 WORKDIR /app
 
@@ -32,14 +40,18 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY supabase/migrations ./supabase/migrations
 COPY scripts/run-migrations.mjs ./scripts/run-migrations.mjs
+COPY --from=migrator /migrator/node_modules ./scripts/node_modules
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
-RUN npm install --no-save pg && \
-    chmod +x docker-entrypoint.sh && \
-    chown -R nextjs:nodejs /app/supabase /app/scripts /app/docker-entrypoint.sh /app/node_modules
+RUN chmod +x docker-entrypoint.sh && \
+    chown -R nextjs:nodejs /app/supabase /app/scripts /app/docker-entrypoint.sh
 
 USER nextjs
 
 EXPOSE 3000
+
+# Reports unhealthy when configuration is invalid or Postgres stops answering.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["./docker-entrypoint.sh"]

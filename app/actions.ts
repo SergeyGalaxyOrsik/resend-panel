@@ -6,11 +6,15 @@ import { getTranslations } from "next-intl/server"
 import {
   clearSession,
   establishSession,
+  getCurrentUser,
   getMailboxScope,
+  purgeExpiredSessions,
   registerOwner,
   requireAuthenticatedUser,
   requireCurrentUser,
   requireOwner,
+  revokeAllSessions,
+  revokeOtherSessions,
   verifyLogin,
 } from "@/lib/auth"
 import {
@@ -26,6 +30,7 @@ import {
   renderThreadSubject,
 } from "@/lib/email"
 import {
+  createToken,
   encryptSecret,
   generateTemporaryPassword,
   hashPassword,
@@ -64,6 +69,29 @@ import {
   updateResendSettings,
   updateUserPassword,
 } from "@/lib/store"
+import {
+  addressKey,
+  checkThrottle,
+  clearThrottle,
+  emailKey,
+  passwordChangeKey,
+  purgeExpiredThrottles,
+  registerFailure,
+} from "@/lib/rate-limit"
+import { recordAudit } from "@/lib/audit"
+import { logger } from "@/lib/logger"
+import {
+  bumpAttempts,
+  findDelivery,
+  markDeliveryStatus,
+} from "@/lib/webhook-deliveries"
+import {
+  completeSendKey,
+  purgeOldSendReceipts,
+  releaseSendKey,
+  reserveSendKey,
+} from "@/lib/idempotency"
+import { getClientAddress } from "@/lib/request"
 import { mapResendEventType } from "@/lib/webhooks"
 import { syncResendHistory } from "@/lib/resend-sync"
 import type { AuthState, CreateUserState, Mailbox } from "@/lib/types"
@@ -120,17 +148,43 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
     return { error: t("emailPasswordRequired") }
   }
 
+  const address = await getClientAddress()
+  const keys = [emailKey(email), ...(address ? [addressKey(address)] : [])]
+
+  // Checked before the password is looked at, so a locked account costs an
+  // attacker one query and tells them nothing about the password.
+  const throttle = await checkThrottle(keys)
+  if (throttle.locked) {
+    await recordAudit({ action: "auth.sign_in_blocked", target: email })
+    return { error: t("tooManyAttempts", { minutes: throttle.retryAfterMinutes }) }
+  }
+
   const user = await verifyLogin(email, password)
   if (!user) {
-    return { error: t("invalidCredentials") }
+    const failure = await registerFailure(keys)
+    if (failure.locked) {
+      await recordAudit({ action: "auth.sign_in_blocked", target: email })
+    }
+    return {
+      error: failure.locked
+        ? t("tooManyAttempts", { minutes: failure.retryAfterMinutes })
+        : t("invalidCredentials"),
+    }
   }
 
   if (!user.isActive) {
+    // A deactivated account is still a correct password, so it is not a failure
+    // to count: locking it out would only punish the person who was disabled.
     return { error: t("accountDeactivated") }
   }
 
+  await clearThrottle(keys)
+  await purgeExpiredThrottles()
+
   await clearSession()
   await establishSession(user.id)
+  await purgeExpiredSessions()
+  await recordAudit({ action: "auth.signed_in", actor: user, target: user.email })
   redirect(user.mustChangePassword ? "/change-password" : "/dashboard")
 }
 
@@ -146,9 +200,24 @@ export async function changePasswordAction(_prev: AuthState, formData: FormData)
     return { error: t("emailPasswordRequired") }
   }
 
-  if (!verifyPassword(currentPassword, user.passwordHash)) {
-    return { error: t("currentPasswordInvalid") }
+  // Same counter as login: this form also checks a password, so it is the same
+  // door with a different handle.
+  const throttleKeys = [passwordChangeKey(user.id)]
+  const throttle = await checkThrottle(throttleKeys)
+  if (throttle.locked) {
+    return { error: t("tooManyAttempts", { minutes: throttle.retryAfterMinutes }) }
   }
+
+  if (!verifyPassword(currentPassword, user.passwordHash)) {
+    const failure = await registerFailure(throttleKeys)
+    return {
+      error: failure.locked
+        ? t("tooManyAttempts", { minutes: failure.retryAfterMinutes })
+        : t("currentPasswordInvalid"),
+    }
+  }
+
+  await clearThrottle(throttleKeys)
 
   if (password.length < 8) {
     return { error: t("passwordMinLength") }
@@ -163,10 +232,48 @@ export async function changePasswordAction(_prev: AuthState, formData: FormData)
   }
 
   await updateUserPassword(user.id, hashPassword(password), false)
+
+  // Changing a password is how you throw somebody out, so every other device
+  // loses its session. This one keeps its cookie and stays signed in.
+  const revoked = await revokeOtherSessions(user.id)
+
+  await recordAudit({ action: "auth.password_changed", actor: user, target: user.email })
+  if (revoked > 0) {
+    await recordAudit({
+      action: "auth.sessions_revoked",
+      actor: user,
+      target: user.email,
+      metadata: { sessions: revoked, reason: "password change" },
+    })
+  }
+
   redirect("/dashboard")
 }
 
+/**
+ * Drops every session for the account, this one included, then lands on the login
+ * screen. Named for what it does: after this, no device stays signed in.
+ */
+export async function signOutEverywhereAction() {
+  const user = await requireAuthenticatedUser()
+
+  await revokeAllSessions(user.id)
+  await recordAudit({
+    action: "auth.sessions_revoked",
+    actor: user,
+    target: user.email,
+    metadata: { reason: "signed out everywhere" },
+  })
+
+  redirect("/login")
+}
+
 export async function logoutAction() {
+  const user = await getCurrentUser()
+  if (user) {
+    await recordAudit({ action: "auth.signed_out", actor: user, target: user.email })
+  }
+
   await clearSession()
   redirect("/login")
 }
@@ -197,6 +304,15 @@ export async function saveSettingsAction(_prev: AuthState, formData: FormData): 
   }
 
   await updateResendSettings(settingsUpdate)
+
+  await recordAudit({
+    action: token ? "settings.token_updated" : "settings.updated",
+    actor: user,
+    workspaceId: workspace.id,
+    target: fromEmail,
+    // The token itself is never recorded, only the fact that it was replaced.
+    metadata: { fromName, fromEmail, inboundEmail, tokenReplaced: Boolean(token) },
+  })
 
   revalidatePath("/settings")
   return { success: t("settingsSaved", { email: user.email }) }
@@ -231,7 +347,7 @@ export async function testResendConnectionAction(_prev: AuthState): Promise<Auth
 
 export async function syncResendHistoryAction(_prev: AuthState): Promise<AuthState> {
   const t = await getTranslations("errors")
-  await requireOwner()
+  const owner = await requireOwner()
   const settings = await getCurrentSettings()
   const token = getResendToken(settings?.tokenEncrypted)
 
@@ -241,6 +357,12 @@ export async function syncResendHistoryAction(_prev: AuthState): Promise<AuthSta
 
   try {
     const result = await syncResendHistory(token)
+
+    await recordAudit({
+      action: "settings.history_synced",
+      actor: owner,
+      metadata: { imported: result.imported, backfilled: result.backfilled },
+    })
 
     revalidatePath("/dashboard")
     revalidatePath("/sent")
@@ -276,6 +398,8 @@ async function sendMessage(
     replyToMessageId?: string
     references?: string[]
     attachmentIds?: string[]
+    /** Passed to Resend so their side also refuses to deliver the same send twice. */
+    idempotencyKey?: string
   }
 ) {
   const t = await getTranslations("errors")
@@ -342,6 +466,7 @@ async function sendMessage(
       headers: {
         Authorization: `Bearer ${settingsToken}`,
         "Content-Type": "application/json",
+        ...(payload.idempotencyKey ? { "Idempotency-Key": payload.idempotencyKey } : {}),
       },
       body: JSON.stringify({
         from,
@@ -408,6 +533,10 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
   const draftId = readField(formData, "draftId") || undefined
   const mailboxId = readField(formData, "mailboxId")
   const attachmentIds = formData.getAll("attachmentIds") as string[]
+  // Minted once per composer, so every retry of the same message carries the same
+  // key. A form without one (no JavaScript yet, an old tab) still sends, it just
+  // gets no protection beyond this request.
+  const idempotencyKey = readField(formData, "idempotencyKey") || createToken("send")
 
   if (!subject && intent !== "save") {
     return { error: t("subjectRequired") }
@@ -476,6 +605,18 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
 
   await requireAtLeastOneRecipient(finalRecipients)
 
+  // Reserved before the API call: whoever wins the insert sends, everyone else
+  // is answered from the row.
+  const reservation = await reserveSendKey(idempotencyKey, { workspaceId: workspace.id, userId: user.id })
+  if (reservation.status === "duplicate") {
+    const { receipt } = reservation
+    if (!receipt.messageId) {
+      return { error: t("sendInProgress") }
+    }
+
+    redirect(receipt.threadId ? `/thread/${receipt.threadId}?from=inbox` : "/sent")
+  }
+
   const settingsToken = getResendToken(settings?.tokenEncrypted)
   const result = await sendMessage(workspace.id, settingsToken, settings, mailbox, {
     subject: finalSubject,
@@ -487,11 +628,21 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
     replyToMessageId: replyTarget,
     references,
     attachmentIds,
+    idempotencyKey,
   })
 
   if (result.error) {
+    // Freed so the composer can try again with the same key, which Resend then
+    // recognises if the first attempt did reach them.
+    await releaseSendKey(idempotencyKey)
     return { error: result.error }
   }
+
+  if (result.messageId) {
+    await completeSendKey(idempotencyKey, { messageId: result.messageId, threadId: finalThreadId })
+  }
+
+  await purgeOldSendReceipts()
 
   if (draftId) {
     await deleteDraft(draftId, user.id)
@@ -502,10 +653,12 @@ export async function composeAction(_prev: AuthState, formData: FormData): Promi
   revalidatePath("/inbox")
   revalidatePath("/statistics")
   if (finalThreadId) {
-    revalidatePath(`/inbox/${finalThreadId}`)
+    revalidatePath(`/thread/${finalThreadId}`)
   }
 
-  redirect(finalThreadId ? `/inbox/${finalThreadId}` : "/sent")
+  // The reader lives at /thread/[id]; /inbox/[id] is not a route, so sending used
+  // to land on a 404 instead of the conversation that was just replied to.
+  redirect(finalThreadId ? `/thread/${finalThreadId}?from=inbox` : "/sent")
 }
 
 export async function inboundWebhookAction(requestBody: unknown) {
@@ -541,7 +694,7 @@ export async function inboundWebhookAction(requestBody: unknown) {
   let html = payload.html
   let text = payload.text
   if ((!html || !text) && payload.emailId) {
-    console.log("[inbound] html/text empty, fetching from Resend API for email_id:", payload.emailId)
+    logger.debug("inbound.body_missing", { emailId: payload.emailId })
     const settings = await getCurrentSettings()
     const token = getResendToken(settings?.tokenEncrypted)
     if (token) {
@@ -549,12 +702,16 @@ export async function inboundWebhookAction(requestBody: unknown) {
       if (emailData) {
         html = html || emailData.html
         text = text || emailData.text
-        console.log("[inbound] fetched from API - html:", html?.length || 0, "chars, text:", text?.length || 0, "chars")
+        logger.debug("inbound.body_fetched", {
+          emailId: payload.emailId,
+          htmlLength: html?.length ?? 0,
+          textLength: text?.length ?? 0,
+        })
       } else {
-        console.log("[inbound] fetchResendEmail returned null")
+        logger.warn("inbound.body_fetch_empty", { emailId: payload.emailId })
       }
     } else {
-      console.log("[inbound] no Resend token configured")
+      logger.warn("inbound.token_missing", { emailId: payload.emailId })
     }
   }
 
@@ -633,11 +790,85 @@ export async function resendEventWebhookAction(requestBody: unknown) {
   return { processed: true, type: mapped }
 }
 
+// ── Webhook dead letters (owner only) ──────────────────────
+
+/**
+ * Replays a stored payload through the same handler that failed on it. Inbound
+ * mail is safe to replay: the handler recognises a message id it has already
+ * recorded and answers `duplicate` instead of filing a second copy.
+ */
+export async function retryWebhookDeliveryAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const t = await getTranslations("errors")
+  const owner = await requireOwner()
+
+  const deliveryId = readField(formData, "deliveryId")
+  const delivery = deliveryId ? await findDelivery(deliveryId) : null
+
+  if (!delivery) {
+    return { error: t("webhookDeliveryNotFound") }
+  }
+
+  try {
+    if (delivery.kind === "inbound") {
+      await inboundWebhookAction(delivery.payload)
+    } else {
+      await resendEventWebhookAction(delivery.payload)
+    }
+
+    await markDeliveryStatus(delivery.id, "resolved")
+    await recordAudit({
+      action: "webhook.retried",
+      actor: owner,
+      target: delivery.kind,
+      metadata: { deliveryId: delivery.id, attempts: delivery.attempts + 1 },
+    })
+
+    logger.info("webhook.retry_succeeded", { kind: delivery.kind, deliveryId: delivery.id })
+
+    revalidatePath("/webhooks")
+    revalidatePath("/inbox")
+    revalidatePath("/statistics")
+    return { success: t("webhookRetried") }
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : t("unknownError")
+    await bumpAttempts(delivery.id, delivery.attempts + 1)
+    await markDeliveryStatus(delivery.id, "failed", reason)
+    logger.warn("webhook.retry_failed", { kind: delivery.kind, deliveryId: delivery.id, reason })
+
+    revalidatePath("/webhooks")
+    return { error: reason }
+  }
+}
+
+/** Takes a delivery out of the queue without replaying it. The row is kept. */
+export async function discardWebhookDeliveryAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const t = await getTranslations("errors")
+  const owner = await requireOwner()
+
+  const deliveryId = readField(formData, "deliveryId")
+  const delivery = deliveryId ? await findDelivery(deliveryId) : null
+
+  if (!delivery) {
+    return { error: t("webhookDeliveryNotFound") }
+  }
+
+  await markDeliveryStatus(delivery.id, "discarded", delivery.error)
+  await recordAudit({
+    action: "webhook.discarded",
+    actor: owner,
+    target: delivery.kind,
+    metadata: { deliveryId: delivery.id, attempts: delivery.attempts },
+  })
+
+  revalidatePath("/webhooks")
+  return { success: t("webhookDiscarded") }
+}
+
 // ── User administration (owner only) ───────────────────────
 
 export async function createUserAction(_prev: CreateUserState, formData: FormData): Promise<CreateUserState> {
   const t = await getTranslations("errors")
-  await requireOwner()
+  const owner = await requireOwner()
   const workspace = await getCurrentWorkspace()
   if (!workspace) {
     return { error: t("workspaceMissing") }
@@ -666,13 +897,21 @@ export async function createUserAction(_prev: CreateUserState, formData: FormDat
     await setMailboxesForUser(user.id, allowed)
   }
 
+  await recordAudit({
+    action: "user.created",
+    actor: owner,
+    workspaceId: workspace.id,
+    target: email,
+    metadata: { role: user.role, mailboxes: mailboxIds.length },
+  })
+
   revalidatePath("/users")
   return { success: t("userCreated", { email }), createdEmail: email, temporaryPassword }
 }
 
 export async function assignMailboxesAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const t = await getTranslations("errors")
-  await requireOwner()
+  const owner = await requireOwner()
   const workspace = await getCurrentWorkspace()
   if (!workspace) {
     return { error: t("workspaceMissing") }
@@ -691,6 +930,18 @@ export async function assignMailboxesAction(_prev: AuthState, formData: FormData
     .filter((id) => mailboxes.some((mailbox) => mailbox.id === id))
 
   await setMailboxesForUser(user.id, mailboxIds)
+
+  await recordAudit({
+    action: "user.mailboxes_assigned",
+    actor: owner,
+    workspaceId: workspace.id,
+    target: user.email,
+    metadata: {
+      addresses: mailboxes
+        .filter((mailbox) => mailboxIds.includes(mailbox.id))
+        .map((mailbox) => mailbox.address),
+    },
+  })
 
   revalidatePath("/users")
   return { success: t("mailboxesAssigned", { email: user.email }) }
@@ -715,6 +966,12 @@ export async function setUserActiveAction(_prev: AuthState, formData: FormData):
   // Deactivating drops the account's sessions, so an open tab stops working immediately.
   await setUserActive(user.id, isActive)
 
+  await recordAudit({
+    action: isActive ? "user.activated" : "user.deactivated",
+    actor: owner,
+    target: user.email,
+  })
+
   revalidatePath("/users")
   return { success: isActive ? t("userActivated", { email: user.email }) : t("userDeactivated", { email: user.email }) }
 }
@@ -737,6 +994,8 @@ export async function deleteUserAction(_prev: AuthState, formData: FormData): Pr
   await deleteSessionsForUser(user.id)
   await deleteUser(user.id)
 
+  await recordAudit({ action: "user.deleted", actor: owner, target: user.email })
+
   revalidatePath("/users")
   return { success: t("userDeleted", { email: user.email }) }
 }
@@ -745,7 +1004,7 @@ export async function deleteUserAction(_prev: AuthState, formData: FormData): Pr
 
 export async function createMailboxAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const t = await getTranslations("errors")
-  await requireOwner()
+  const owner = await requireOwner()
   const workspace = await getCurrentWorkspace()
   if (!workspace) {
     return { error: t("workspaceMissing") }
@@ -764,6 +1023,14 @@ export async function createMailboxAction(_prev: AuthState, formData: FormData):
 
   await createMailbox(workspace.id, address, displayName)
 
+  await recordAudit({
+    action: "mailbox.created",
+    actor: owner,
+    workspaceId: workspace.id,
+    target: address,
+    metadata: { displayName },
+  })
+
   revalidatePath("/mailboxes")
   revalidatePath("/users")
   return { success: t("mailboxCreated", { address }) }
@@ -771,7 +1038,7 @@ export async function createMailboxAction(_prev: AuthState, formData: FormData):
 
 export async function updateMailboxAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const t = await getTranslations("errors")
-  await requireOwner()
+  const owner = await requireOwner()
   const workspace = await getCurrentWorkspace()
   if (!workspace) {
     return { error: t("workspaceMissing") }
@@ -787,6 +1054,14 @@ export async function updateMailboxAction(_prev: AuthState, formData: FormData):
 
   await updateMailbox(mailbox.id, displayName)
 
+  await recordAudit({
+    action: "mailbox.updated",
+    actor: owner,
+    workspaceId: workspace.id,
+    target: mailbox.address,
+    metadata: { displayName },
+  })
+
   revalidatePath("/mailboxes")
   revalidatePath("/users")
   return { success: t("mailboxUpdated", { address: mailbox.address }) }
@@ -794,7 +1069,7 @@ export async function updateMailboxAction(_prev: AuthState, formData: FormData):
 
 export async function deleteMailboxAction(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const t = await getTranslations("errors")
-  await requireOwner()
+  const owner = await requireOwner()
   const workspace = await getCurrentWorkspace()
   if (!workspace) {
     return { error: t("workspaceMissing") }
@@ -810,6 +1085,13 @@ export async function deleteMailboxAction(_prev: AuthState, formData: FormData):
   // Mail is kept: the foreign keys null the link, so those threads and messages
   // fall back to being readable by the owner only.
   await deleteMailbox(mailbox.id)
+
+  await recordAudit({
+    action: "mailbox.deleted",
+    actor: owner,
+    workspaceId: workspace.id,
+    target: mailbox.address,
+  })
 
   revalidatePath("/mailboxes")
   revalidatePath("/users")

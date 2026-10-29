@@ -46,3 +46,9 @@ next-env.d.ts
 # local data store (legacy JSON; do not commit)
 /.data/
 _docs
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

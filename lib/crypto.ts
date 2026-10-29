@@ -1,9 +1,31 @@
 import crypto from "node:crypto"
+import { LEGACY_DEV_SECRET, checkAppSecret } from "@/lib/env"
 
-const DEFAULT_SECRET = "resend-panel-dev-secret-change-me"
+let warnedAboutSecret = false
 
+/**
+ * The key every stored secret is encrypted with. A bad `APP_SECRET` is refused
+ * outright in production: deriving a key from a placeholder means the ciphertext
+ * survives but stops decrypting the moment a real key is configured, and that
+ * failure surfaces far away from its cause. Outside production the old fallback
+ * is kept so a scratch install still runs, with one warning.
+ */
 function getSecret() {
-  return process.env.APP_SECRET || DEFAULT_SECRET
+  const problem = checkAppSecret()
+  if (!problem) {
+    return process.env.APP_SECRET as string
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(`APP_SECRET is ${problem.message}`)
+  }
+
+  if (!warnedAboutSecret) {
+    warnedAboutSecret = true
+    console.warn(`[crypto] APP_SECRET is ${problem.message} Falling back to the development key.`)
+  }
+
+  return process.env.APP_SECRET?.trim() || LEGACY_DEV_SECRET
 }
 
 function deriveKey() {

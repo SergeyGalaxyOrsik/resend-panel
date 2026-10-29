@@ -201,14 +201,25 @@ export async function getCurrentWorkspace() {
 
 // ── Sessions ───────────────────────────────────────────────
 
-export async function createSession(userId: string) {
-  await supabase.from("sessions").delete().eq("user_id", userId)
+const SESSION_LIFETIME_MS = 1000 * 60 * 60 * 24 * 14
 
+/**
+ * Signing in used to delete every other session for the account, so a second
+ * device silently signed the first one out. Sessions are per device now; what
+ * gets cleaned up here is only the account's own expired rows.
+ */
+export async function createSession(userId: string, context?: { ip?: string; userAgent?: string }) {
+  await deleteExpiredSessionsForUser(userId)
+
+  const now = new Date()
   const session: Session = {
     id: createToken("session"),
     userId,
-    createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString(),
+    createdAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + SESSION_LIFETIME_MS).toISOString(),
+    lastSeenAt: now.toISOString(),
+    ip: context?.ip ?? "",
+    userAgent: context?.userAgent ?? "",
   }
 
   const { error } = await supabase.from("sessions").insert({
@@ -216,6 +227,9 @@ export async function createSession(userId: string) {
     user_id: session.userId,
     created_at: session.createdAt,
     expires_at: session.expiresAt,
+    last_seen_at: session.lastSeenAt,
+    ip: session.ip,
+    user_agent: session.userAgent,
   })
 
   if (error) throw new Error(error.message)
@@ -228,12 +242,48 @@ export async function findSession(sessionToken: string) {
   return mapSession(data)
 }
 
+export async function touchSession(sessionId: string, at = new Date()) {
+  await supabase.from("sessions").update({ last_seen_at: at.toISOString() }).eq("id", sessionId)
+}
+
+export async function listSessionsForUser(userId: string): Promise<Session[]> {
+  const { data } = await supabase
+    .from("sessions")
+    .select("*")
+    .eq("user_id", userId)
+    .gte("expires_at", new Date().toISOString())
+    .order("last_seen_at", { ascending: false })
+
+  return (data || []).map(mapSession)
+}
+
 export async function revokeSession(sessionId: string) {
   await supabase.from("sessions").delete().eq("id", sessionId)
 }
 
 export async function deleteSessionsForUser(userId: string) {
   await supabase.from("sessions").delete().eq("user_id", userId)
+}
+
+/** Used after a password change: the device that changed it stays signed in. */
+export async function deleteOtherSessionsForUser(userId: string, keepSessionId: string) {
+  const { data } = await supabase
+    .from("sessions")
+    .delete()
+    .eq("user_id", userId)
+    .neq("id", keepSessionId)
+    .select("id")
+
+  return data?.length ?? 0
+}
+
+export async function deleteExpiredSessionsForUser(userId: string) {
+  await supabase.from("sessions").delete().eq("user_id", userId).lt("expires_at", new Date().toISOString())
+}
+
+/** Housekeeping for the whole table, called on sign-in. */
+export async function deleteExpiredSessions() {
+  await supabase.from("sessions").delete().lt("expires_at", new Date().toISOString())
 }
 
 // ── Mailboxes ──────────────────────────────────────────────
@@ -560,6 +610,42 @@ export async function getThreadWithMessages(workspaceId: string, threadId: strin
   }
 }
 
+// ── Bulk reads ─────────────────────────────────────────────
+
+/**
+ * PostgREST caps every response at `max_rows` (1000 on hosted Supabase) and drops
+ * the rest without an error, and a long `in(...)` list can overflow the request
+ * URL. Bulk reads therefore go through here: ids in chunks, each chunk paged
+ * until a short page says it is exhausted. `page` must order by a unique column,
+ * or rows can repeat or vanish across page boundaries.
+ */
+const ID_CHUNK_SIZE = 150
+const PAGE_SIZE = 1000
+
+async function selectAllByIds<Row>(
+  ids: string[],
+  page: (
+    chunk: string[],
+    from: number,
+    to: number
+  ) => PromiseLike<{ data: Row[] | null; error: { message: string } | null }>
+): Promise<Row[]> {
+  const rows: Row[] = []
+
+  for (let start = 0; start < ids.length; start += ID_CHUNK_SIZE) {
+    const chunk = ids.slice(start, start + ID_CHUNK_SIZE)
+
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error } = await page(chunk, from, from + PAGE_SIZE - 1)
+      if (error) throw new Error(error.message)
+      rows.push(...(data || []))
+      if (!data || data.length < PAGE_SIZE) break
+    }
+  }
+
+  return rows
+}
+
 // ── Folders (Gmail-style state) ────────────────────────────
 
 type ThreadFilter = { eq(column: string, value: unknown): ThreadFilter }
@@ -623,19 +709,19 @@ export async function listThreadSummaries(
 
   const threadIds = threads.map((thread) => thread.id)
 
-  let messageQuery = supabase
-    .from("messages")
-    .select("id, thread_id, text, from_email, to, direction, is_read, created_at, sent_at, received_at")
-    .eq("workspace_id", workspaceId)
-    .in("thread_id", threadIds)
+  const messageRows = await selectAllByIds(threadIds, (chunk, from, to) => {
+    let messageQuery = supabase
+      .from("messages")
+      .select("id, thread_id, text, from_email, to, direction, is_read, created_at, sent_at, received_at")
+      .eq("workspace_id", workspaceId)
+      .in("thread_id", chunk)
 
-  if (allowed) messageQuery = messageQuery.in("mailbox_id", allowed)
+    if (allowed) messageQuery = messageQuery.in("mailbox_id", allowed)
 
-  const { data: messageRows } = await messageQuery
+    return messageQuery.order("id").range(from, to)
+  })
 
-  const withAttachments = await messageIdsWithAttachments(
-    (messageRows || []).map((row) => row.id as string)
-  )
+  const withAttachments = await messageIdsWithAttachments(messageRows.map((row) => row.id as string))
 
   type Latest = { at: number; snippet: string; correspondent: string }
   const stats = new Map<
@@ -643,7 +729,7 @@ export async function listThreadSummaries(
     { unread: number; count: number; attachments: boolean; latest: Latest | null }
   >()
 
-  for (const row of messageRows || []) {
+  for (const row of messageRows) {
     const threadId = row.thread_id as string
     const entry = stats.get(threadId) ?? { unread: 0, count: 0, attachments: false, latest: null }
 
@@ -713,12 +799,11 @@ async function threadIdsWithOutbound(workspaceId: string, scope?: MailboxScope) 
 async function messageIdsWithAttachments(messageIds: string[]) {
   if (!messageIds.length) return new Set<string>()
 
-  const { data } = await supabase
-    .from("attachments")
-    .select("message_id")
-    .in("message_id", messageIds)
+  const rows = await selectAllByIds(messageIds, (chunk, from, to) =>
+    supabase.from("attachments").select("id, message_id").in("message_id", chunk).order("id").range(from, to)
+  )
 
-  return new Set((data || []).map((row) => row.message_id as string).filter(Boolean))
+  return new Set(rows.map((row) => row.message_id as string).filter(Boolean))
 }
 
 /** Badge numbers for the folder rail. Inbox counts unread; the rest count threads. */
@@ -1323,6 +1408,9 @@ function mapSession(row: Record<string, unknown>): Session {
     userId: row.user_id as string,
     createdAt: row.created_at as string,
     expiresAt: row.expires_at as string,
+    lastSeenAt: (row.last_seen_at as string) ?? (row.created_at as string),
+    ip: (row.ip as string) ?? "",
+    userAgent: (row.user_agent as string) ?? "",
   }
 }
 
